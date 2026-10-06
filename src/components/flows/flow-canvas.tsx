@@ -57,7 +57,7 @@ import {
   type OnNodeDrag,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Users } from 'lucide-react';
 
 import { useTranslations } from 'next-intl';
 
@@ -97,6 +97,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useFlowEditor } from './flow-editor-state';
 import { NodeConfigForm } from './forms/node-config-form';
+import { NodeLeadsModal } from './node-leads-modal';
 
 // React-Flow node `data` payload — the bits our custom renderer needs.
 interface NodeData extends Record<string, unknown> {
@@ -105,6 +106,7 @@ interface NodeData extends Record<string, unknown> {
   /** Validator's "look here" pulse — flashes the card border for
    *  ~1.6s. Drives a CSS animation, doesn't change layout. */
   isFlashed: boolean;
+  onViewLeads?: (node: BuilderNode) => void;
 }
 
 const NODE_WIDTH = 240;
@@ -135,7 +137,7 @@ function slotColor(nodeType: NodeType, slotId: string, fallback: string) {
 
 function FlowNodeCard({ data, selected }: NodeProps) {
   const t = useTranslations('Flows.builder');
-  const { node, isEntry, isFlashed } = data as NodeData;
+  const { node, isEntry, isFlashed, onViewLeads } = data as NodeData;
   const meta = NODE_META[node.node_type];
   const c = nodeColors(node.node_type);
   const tSummary = useTranslations('Flows.summary');
@@ -203,8 +205,24 @@ function FlowNodeCard({ data, selected }: NodeProps) {
           </span>
         )}
       </div>
-      <div className="text-muted-foreground mt-2 truncate font-mono text-[11px]">
-        {node.node_key}
+      <div className="mt-2 flex items-center justify-between gap-1">
+        <div className="text-muted-foreground truncate font-mono text-[11px]">
+          {node.node_key}
+        </div>
+        {onViewLeads && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewLeads(node);
+            }}
+            className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted hover:text-foreground"
+            title="View leads for this node"
+          >
+            <Users className="h-2.5 w-2.5" />
+            <span>Leads</span>
+          </button>
+        )}
       </div>
       {summary && (
         <div className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-relaxed">
@@ -276,6 +294,7 @@ export function FlowCanvas() {
 function FlowCanvasInner() {
   const t = useTranslations('Flows.builder');
   const {
+    flow,
     state,
     setState,
     updateNodeConfig,
@@ -287,6 +306,23 @@ function FlowCanvasInner() {
   const reactFlow = useReactFlow();
   const builderNodes = state.nodes;
   const entryNodeId = state.entry_node_id;
+
+  const [leadsModalNode, setLeadsModalNode] = useState<{
+    node_key: string;
+    name?: string;
+    type: string;
+  } | null>(null);
+
+  const handleOpenLeads = useCallback((n: BuilderNode) => {
+    setLeadsModalNode({
+      node_key: n.node_key,
+      name:
+        (n.config?.name as string) ||
+        (n.config?.title as string) ||
+        n.node_key,
+      type: n.node_type,
+    });
+  }, []);
 
   // Side-panel state — which node's form is open. Canvas-only UI; the
   // list view's analogue is the per-card expanded set in
@@ -345,12 +381,13 @@ function FlowCanvasInner() {
           node: n,
           isEntry: n.node_key === entryNodeId,
           isFlashed: n.node_key === flashKey,
+          onViewLeads: handleOpenLeads,
         },
       };
     });
 
     return nodes;
-  }, [builderNodes, entryNodeId, flashKey, autoLayoutPositions]);
+  }, [builderNodes, entryNodeId, flashKey, autoLayoutPositions, handleOpenLeads]);
 
   const [rfNodes, setRfNodes] = useState<RfNode<NodeData>[]>(derivedRfNodes);
 
@@ -583,8 +620,20 @@ function FlowCanvasInner() {
         onUpdateConfig={onSelectedUpdateConfig}
         onDelete={handleDeleteSelected}
         onSetEntry={handleSetEntry}
+        onViewLeads={() => selectedNode && handleOpenLeads(selectedNode)}
         t={t}
       />
+
+      {leadsModalNode && (
+        <NodeLeadsModal
+          open={leadsModalNode !== null}
+          onOpenChange={(open) => !open && setLeadsModalNode(null)}
+          flowId={flow.id}
+          nodeKey={leadsModalNode.node_key}
+          nodeName={leadsModalNode.name}
+          nodeType={leadsModalNode.type}
+        />
+      )}
     </>
   );
 }
@@ -603,6 +652,7 @@ function NodeEditSheet({
   onUpdateConfig,
   onDelete,
   onSetEntry,
+  onViewLeads,
   t,
 }: {
   node: BuilderNode | null;
@@ -612,6 +662,7 @@ function NodeEditSheet({
   onUpdateConfig: (patch: Record<string, unknown>) => void;
   onDelete: () => void;
   onSetEntry: () => void;
+  onViewLeads: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   // Sheet is controlled — opens when a node is selected, closes via
@@ -662,13 +713,24 @@ function NodeEditSheet({
         </div>
 
         <SheetFooter className="border-border border-t px-5 py-3 sm:flex-row sm:justify-between">
-          {!isEntry ? (
-            <Button variant="ghost" size="sm" onClick={onSetEntry}>
-              {t('setAsEntry')}
+          <div className="flex items-center gap-2">
+            {!isEntry ? (
+              <Button variant="ghost" size="sm" onClick={onSetEntry}>
+                {t('setAsEntry')}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onViewLeads}
+              className="gap-1.5 text-xs"
+            >
+              <Users className="h-3.5 w-3.5" />
+              View Leads
             </Button>
-          ) : (
-            <span />
-          )}
+          </div>
           <Button
             variant="ghost"
             size="sm"

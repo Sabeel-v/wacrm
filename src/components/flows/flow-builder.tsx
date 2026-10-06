@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronUp,
   CornerDownRight,
+  Users,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,7 @@ import { NodeConfigForm } from './forms/node-config-form';
 import { NodeKeySelect } from './forms/fields';
 import { IssueLine } from './validation-panel';
 import { useFlowEditor, type BuilderState } from './flow-editor-state';
+import { NodeLeadsModal } from './node-leads-modal';
 
 // ============================================================
 // Local state shape — mirrors the DB but the configs are typed
@@ -76,6 +78,7 @@ import { useFlowEditor, type BuilderState } from './flow-editor-state';
 export function FlowBuilder() {
   const t = useTranslations('Flows.builder');
   const {
+    flow,
     state,
     setState,
     issues,
@@ -85,6 +88,12 @@ export function FlowBuilder() {
     updateNodeConfig,
     removeNode: removeNodeCtx,
   } = useFlowEditor();
+
+  const [leadsModalNode, setLeadsModalNode] = useState<{
+    node_key: string;
+    name?: string;
+    type: string;
+  } | null>(null);
 
   // List-only UI state: which cards are expanded + scroll refs for
   // jump-to-node. The flash itself is read from context (flashKey)
@@ -197,11 +206,32 @@ export function FlowBuilder() {
               onSetEntry={() =>
                 setState((s) => ({ ...s, entry_node_id: node.node_key }))
               }
+              onViewLeads={() =>
+                setLeadsModalNode({
+                  node_key: node.node_key,
+                  name:
+                    (node.config?.name as string) ||
+                    (node.config?.title as string) ||
+                    node.node_key,
+                  type: node.node_type,
+                })
+              }
               t={t}
             />
           ))
         )}
       </section>
+
+      {leadsModalNode && (
+        <NodeLeadsModal
+          open={leadsModalNode !== null}
+          onOpenChange={(open) => !open && setLeadsModalNode(null)}
+          flowId={flow.id}
+          nodeKey={leadsModalNode.node_key}
+          nodeName={leadsModalNode.name}
+          nodeType={leadsModalNode.type}
+        />
+      )}
     </div>
   );
 }
@@ -386,6 +416,7 @@ function NodeCard({
   onUpdateConfig,
   onRemove,
   onSetEntry,
+  onViewLeads,
   t,
 }: {
   node: BuilderNode;
@@ -400,6 +431,7 @@ function NodeCard({
   onUpdateConfig: (patch: Record<string, unknown>) => void;
   onRemove: () => void;
   onSetEntry: () => void;
+  onViewLeads: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
   const meta = NODE_META[node.node_type];
@@ -460,6 +492,20 @@ function NodeCard({
         {hasError && (
           <CircleAlert className="h-3.5 w-3.5 shrink-0 text-red-400" />
         )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewLeads();
+          }}
+          className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+          title="View leads for this node"
+        >
+          <Users className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">View Leads</span>
+        </Button>
         {expanded ? (
           <ChevronUp className="text-muted-foreground h-4 w-4" />
         ) : (
@@ -477,6 +523,15 @@ function NodeCard({
           />
           <div className="border-border mt-4 flex items-center justify-between border-t pt-3">
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onViewLeads}
+                className="gap-1.5 text-xs"
+              >
+                <Users className="h-3.5 w-3.5" />
+                View Leads
+              </Button>
               {!isEntry && (
                 <Button variant="ghost" size="sm" onClick={onSetEntry}>
                   {t('setAsEntry')}
