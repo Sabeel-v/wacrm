@@ -25,7 +25,14 @@ export default function NewBroadcastPage() {
   const router = useRouter();
   const t = useTranslations('Broadcasts.new');
   const { accountId } = useAuth();
-  const { createAndSendBroadcast, isProcessing, progress } = useBroadcastSending();
+  const {
+    createAndSendBroadcast,
+    isProcessing,
+    progress,
+    batchState,
+    pauseBroadcast,
+    resumeBroadcast,
+  } = useBroadcastSending();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [template, setTemplate] = useState<MessageTemplate | null>(null);
@@ -226,6 +233,9 @@ export default function NewBroadcastPage() {
               onBack={() => setCurrentStep(2)}
               isProcessing={isProcessing}
               progress={progress}
+              batchState={batchState}
+              onPause={pauseBroadcast}
+              onResume={resumeBroadcast}
             />
           )}
         </div>

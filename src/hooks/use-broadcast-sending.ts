@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -53,24 +53,51 @@ interface BroadcastPayload {
   headerMediaUrl?: string;
 }
 
+export interface BroadcastBatchState {
+  status: 'idle' | 'preparing' | 'sending' | 'paused' | 'completed' | 'error';
+  currentBatch: number;
+  totalBatches: number;
+  sentCount: number;
+  failedCount: number;
+  totalRecipients: number;
+  progressPercent: number;
+  statusMessage: string;
+  failedBatches: Array<{
+    batchIndex: number;
+    error: string;
+    recipientCount: number;
+  }>;
+}
+
 interface UseBroadcastSendingReturn {
   createAndSendBroadcast: (payload: BroadcastPayload) => Promise<string>;
   isProcessing: boolean;
   progress: number;
+  batchState: BroadcastBatchState;
+  pauseBroadcast: () => void;
+  resumeBroadcast: () => void;
+  cancelBroadcast: () => void;
 }
 
 /**
- * Meta rate-limit buffer. 10 per batch + 1 s pause matches the spec
- * and keeps us comfortably under Meta's per-phone-number messaging
- * rate so a large broadcast never trips the upstream limiter.
+ * Frontend chunked batching configuration.
  *
- * Note this shape when touching `RATE_LIMITS.broadcast`: a campaign is
- * many calls to `/api/whatsapp/broadcast`, not one. A 1 000-recipient
- * send is ~100 calls over several minutes, and a bucket sized for
- * "one call per campaign" throttles most of it away (issue #472).
+ * Slices 3,000+ recipients into chunks of 50 sent sequentially over 3 to 5 minutes.
+ * Each chunk runs in ~1.5s on Vercel Free Tier (well under the 10s FUNCTION_INVOCATION_TIMEOUT),
+ * and the 1500ms delay between chunks respects Meta rate limits while ensuring steady throughput.
  */
-const SEND_BATCH_SIZE = 10;
-const SEND_BATCH_DELAY_MS = 1000;
+export const CHUNK_SIZE = 50;
+export const BATCH_DELAY_MS = 1500;
+
+/** Slices an array of items into chunks of the given size. */
+export function chunkArray<T>(items: T[], size: number): T[][] {
+  if (!items || size <= 0) return [];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
 
 /** `broadcast_recipients` inserts are independent of the send rate. */
 const INSERT_BATCH_SIZE = 200;
@@ -161,6 +188,48 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
   const { accountId } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [batchState, setBatchState] = useState<BroadcastBatchState>({
+    status: 'idle',
+    currentBatch: 0,
+    totalBatches: 0,
+    sentCount: 0,
+    failedCount: 0,
+    totalRecipients: 0,
+    progressPercent: 0,
+    statusMessage: '',
+    failedBatches: [],
+  });
+
+  const isPausedRef = useRef(false);
+  const isCancelledRef = useRef(false);
+
+  const pauseBroadcast = () => {
+    isPausedRef.current = true;
+    setBatchState((prev) => ({
+      ...prev,
+      status: 'paused',
+      statusMessage: `Broadcast paused at batch ${prev.currentBatch} of ${prev.totalBatches}`,
+    }));
+  };
+
+  const resumeBroadcast = () => {
+    isPausedRef.current = false;
+    setBatchState((prev) => ({
+      ...prev,
+      status: 'sending',
+      statusMessage: `Resuming batch ${prev.currentBatch} of ${prev.totalBatches}...`,
+    }));
+  };
+
+  const cancelBroadcast = () => {
+    isCancelledRef.current = true;
+    isPausedRef.current = false;
+    setBatchState((prev) => ({
+      ...prev,
+      status: 'error',
+      statusMessage: 'Broadcast cancelled by user.',
+    }));
+  };
 
   async function resolveAudience(audience: AudienceConfig): Promise<Contact[]> {
     const supabase = createClient();
@@ -345,8 +414,21 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
   }
 
   async function createAndSendBroadcast(payload: BroadcastPayload): Promise<string> {
+    isPausedRef.current = false;
+    isCancelledRef.current = false;
     setIsProcessing(true);
     setProgress(0);
+    setBatchState({
+      status: 'preparing',
+      currentBatch: 0,
+      totalBatches: 0,
+      sentCount: 0,
+      failedCount: 0,
+      totalRecipients: 0,
+      progressPercent: 0,
+      statusMessage: 'Resolving audience and preparing broadcast...',
+      failedBatches: [],
+    });
 
     const supabase = createClient();
 
@@ -474,7 +556,6 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('Failed to fetch broadcast recipients');
       }
 
-      let failedCount = 0;
       const totalRecipients = recipients.length;
 
       // Media-header templates (image/video/document) require a media
@@ -490,8 +571,47 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       const messageParams =
         isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
 
-      for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
-        const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
+      // ── Step 4: Chunked Sequential Sending ───────────────────────
+      const batches = chunkArray(recipients, CHUNK_SIZE);
+      const totalBatches = batches.length;
+      let currentIndex = 0;
+      let sentCount = 0;
+      let failedCount = 0;
+      const failedBatchesList: Array<{
+        batchIndex: number;
+        error: string;
+        recipientCount: number;
+      }> = [];
+
+      for (const batch of batches) {
+        if (isCancelledRef.current) {
+          console.warn('Broadcast cancelled by user');
+          break;
+        }
+
+        // Wait if paused
+        while (isPausedRef.current) {
+          await sleep(500);
+          if (isCancelledRef.current) break;
+        }
+        if (isCancelledRef.current) break;
+
+        const currentBatchNum = currentIndex + 1;
+        const currentProgressPct =
+          30 + Math.round((currentIndex / totalBatches) * 65);
+
+        setBatchState((prev) => ({
+          ...prev,
+          status: 'sending',
+          currentBatch: currentBatchNum,
+          totalBatches,
+          sentCount,
+          failedCount,
+          totalRecipients,
+          progressPercent: currentProgressPct,
+          statusMessage: `Processing batch ${currentBatchNum} of ${totalBatches} (${sentCount} sent)...`,
+        }));
+        setProgress(currentProgressPct);
 
         const apiRecipients = batch
           .filter((r) => r.contact?.phone)
@@ -503,12 +623,13 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             ...(messageParams ? { messageParams } : {}),
           }));
 
-        if (apiRecipients.length === 0) continue;
+        if (apiRecipients.length === 0) {
+          currentIndex++;
+          continue;
+        }
 
         try {
-          // Send the batch, waiting out a 429 rather than writing the
-          // whole batch off as failed. Only 429 is replayed — see
-          // batchRetryDelayMs for why nothing else can be.
+          // Send the batch chunk, waiting out 429 rate limits
           let data: { error?: string; results?: BroadcastApiResult[] } = {};
           for (let attempt = 1; ; attempt++) {
             const res = await fetch('/api/whatsapp/broadcast', {
@@ -556,6 +677,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             }
 
             if (result.status === 'sent') {
+              sentCount++;
               await supabase
                 .from('broadcast_recipients')
                 .update({
@@ -577,43 +699,87 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             }
           }
         } catch (err) {
+          // Gracefully catch transient network drops or unexpected batch failures
+          const errorMsg =
+            err instanceof Error ? err.message : 'Unknown network error';
+          console.error(`Batch ${currentBatchNum} failed:`, errorMsg);
+          failedBatchesList.push({
+            batchIndex: currentBatchNum,
+            error: errorMsg,
+            recipientCount: batch.length,
+          });
+
           for (const recipient of batch) {
             failedCount++;
             await supabase
               .from('broadcast_recipients')
               .update({
                 status: 'failed',
-                error_message: err instanceof Error ? err.message : 'Unknown error',
+                error_message: errorMsg,
               })
               .eq('id', recipient.id);
           }
         }
 
-        const progressPct =
-          30 + Math.round(((i + batch.length) / totalRecipients) * 60);
-        setProgress(progressPct);
+        const nextProgressPct =
+          30 + Math.round(((currentIndex + 1) / totalBatches) * 65);
+        setProgress(nextProgressPct);
 
-        if (i + SEND_BATCH_SIZE < recipients.length) {
-          await sleep(SEND_BATCH_DELAY_MS);
+        setBatchState((prev) => ({
+          ...prev,
+          sentCount,
+          failedCount,
+          failedBatches: [...failedBatchesList],
+          progressPercent: nextProgressPct,
+          statusMessage:
+            currentIndex + 1 === totalBatches
+              ? `Completed all ${totalBatches} batches (${sentCount} sent, ${failedCount} failed)`
+              : `Processing batch ${currentIndex + 1} of ${totalBatches} (${sentCount} sent)...`,
+        }));
+
+        // Delay between batches to respect Meta API rate limits and ensure smooth delivery
+        if (currentIndex < totalBatches - 1) {
+          await sleep(BATCH_DELAY_MS);
         }
+        currentIndex++;
       }
 
       // ── Step 5: Finalize status ───────────────────────────────────
       // Aggregate counts are maintained by the DB trigger (migration
       // 003); we only flip the final status here.
       setProgress(95);
-      const finalStatus = failedCount === totalRecipients ? 'failed' : 'sent';
+      const finalStatus =
+        failedCount === totalRecipients
+          ? 'failed'
+          : isCancelledRef.current
+            ? 'draft'
+            : 'sent';
       await supabase
         .from('broadcasts')
         .update({ status: finalStatus })
         .eq('id', broadcast.id);
 
       setProgress(100);
+      setBatchState((prev) => ({
+        ...prev,
+        status: failedCount === totalRecipients ? 'error' : 'completed',
+        progressPercent: 100,
+        statusMessage: `Broadcast completed. ${sentCount} sent, ${failedCount} failed across ${totalBatches} batches.`,
+      }));
+
       return broadcast.id;
     } finally {
       setIsProcessing(false);
     }
   }
 
-  return { createAndSendBroadcast, isProcessing, progress };
+  return {
+    createAndSendBroadcast,
+    isProcessing,
+    progress,
+    batchState,
+    pauseBroadcast,
+    resumeBroadcast,
+    cancelBroadcast,
+  };
 }

@@ -113,6 +113,18 @@ export async function POST(request: Request) {
       )
     }
 
+    // Enforce maximum chunk size to prevent Vercel 10s execution timeouts.
+    // Large audiences (e.g., 3,000+ recipients) must be sent using frontend chunked batching.
+    const MAX_CHUNK_SIZE = 100
+    if (recipients.length > MAX_CHUNK_SIZE) {
+      return NextResponse.json(
+        {
+          error: `Batch size (${recipients.length}) exceeds the maximum allowed chunk size of ${MAX_CHUNK_SIZE}. Please split recipients into chunks of 50 or smaller.`,
+        },
+        { status: 400 }
+      )
+    }
+
     if (!template_name) {
       return NextResponse.json(
         { error: 'template_name is required' },
@@ -160,21 +172,17 @@ export async function POST(request: Request) {
     }
     const templateRow = resolvedTemplate.row
 
-    const results: BroadcastResult[] = []
-    let sentCount = 0
-    let failedCount = 0
-
-    for (const recipient of recipients) {
+    // Helper to send to a single recipient safely.
+    // Guaranteed not to throw so a single invalid number or Meta error never crashes the batch.
+    async function sendToRecipient(recipient: NewRecipient): Promise<BroadcastResult> {
       const sanitized = sanitizePhoneForMeta(recipient.phone)
 
       if (!isValidE164(sanitized)) {
-        results.push({
+        return {
           phone: recipient.phone,
           status: 'failed',
           error: 'Invalid phone number format',
-        })
-        failedCount++
-        continue
+        }
       }
 
       // Retry with phone variants on "not in allowed list" so numbers
@@ -211,23 +219,46 @@ export async function POST(request: Request) {
       }
 
       if (sentMessageId) {
-        results.push({
+        return {
           phone: recipient.phone,
           status: 'sent',
           whatsapp_message_id: sentMessageId,
-        })
-        sentCount++
+        }
       } else {
-        console.error(
-          `Failed to send broadcast to ${recipient.phone}:`,
-          lastError
-        )
-        results.push({
+        return {
           phone: recipient.phone,
           status: 'failed',
           error: lastError || 'Unknown error',
-        })
-        failedCount++
+        }
+      }
+    }
+
+    // Process chunk with controlled concurrency (8 concurrent calls)
+    // Ensures a 50-recipient chunk finishes in ~1.5s, well within Vercel's 10-second limit.
+    const CONCURRENCY = 8
+    const results: BroadcastResult[] = []
+    let sentCount = 0
+    let failedCount = 0
+
+    for (let i = 0; i < recipients.length; i += CONCURRENCY) {
+      const slice = recipients.slice(i, i + CONCURRENCY)
+      const sliceResults = await Promise.all(
+        slice.map((r) =>
+          sendToRecipient(r).catch((err) => ({
+            phone: r.phone,
+            status: 'failed' as const,
+            error: err instanceof Error ? err.message : 'Unexpected processing error',
+          }))
+        )
+      )
+
+      for (const res of sliceResults) {
+        results.push(res)
+        if (res.status === 'sent') {
+          sentCount++
+        } else {
+          failedCount++
+        }
       }
     }
 

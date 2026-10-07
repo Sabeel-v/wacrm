@@ -14,8 +14,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
+import {
+  ArrowLeft,
+  Send,
+  Loader2,
+  Users,
+  Save,
+  CheckCircle2,
+  PauseCircle,
+  AlertTriangle,
+  Play,
+  Pause,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import type { BroadcastBatchState } from '@/hooks/use-broadcast-sending';
 
 interface AudienceConfig {
   type: string;
@@ -33,6 +45,9 @@ interface Step4Props {
   onBack: () => void;
   isProcessing: boolean;
   progress: number;
+  batchState?: BroadcastBatchState;
+  onPause?: () => void;
+  onResume?: () => void;
 }
 
 export function Step4ScheduleSend({
@@ -45,6 +60,9 @@ export function Step4ScheduleSend({
   onBack,
   isProcessing,
   progress,
+  batchState,
+  onPause,
+  onResume,
 }: Step4Props) {
   const t = useTranslations('Broadcasts.wizard');
   const [showConfirm, setShowConfirm] = useState(false);
@@ -144,22 +162,121 @@ export function Step4ScheduleSend({
         </div>
       </div>
 
-      {/* Processing overlay */}
+      {/* Real-time Batch Processing & Progress Overlay */}
       {isProcessing && (
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-          <div className="mb-2 flex items-center justify-between">
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3 shadow-sm">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <p className="text-sm font-medium text-foreground">{t('scheduleSend.sending')}</p>
+              {batchState?.status === 'paused' ? (
+                <PauseCircle className="h-4 w-4 text-amber-500" />
+              ) : batchState?.status === 'completed' ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              ) : batchState?.status === 'error' ? (
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+              ) : (
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              )}
+              <span className="text-sm font-semibold text-foreground">
+                {batchState?.status === 'paused'
+                  ? 'Broadcast Paused'
+                  : batchState?.status === 'completed'
+                    ? 'Broadcast Completed'
+                    : batchState?.status === 'error'
+                      ? 'Broadcast Interrupted'
+                      : t('scheduleSend.sending')}
+              </span>
             </div>
-            <span className="text-xs font-medium text-primary">{progress}%</span>
+            <div className="flex items-center gap-2">
+              {onPause && onResume && batchState && (
+                batchState.status === 'sending' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onPause}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Pause className="mr-1 h-3.5 w-3.5" />
+                    Pause
+                  </Button>
+                ) : batchState.status === 'paused' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onResume}
+                    className="h-7 px-2 text-xs text-primary hover:text-primary/90"
+                  >
+                    <Play className="mr-1 h-3.5 w-3.5" />
+                    Resume
+                  </Button>
+                ) : null
+              )}
+              <span className="text-xs font-semibold text-primary">
+                {batchState?.progressPercent ?? progress}%
+              </span>
+            </div>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-muted">
+
+          {/* Real-time status text */}
+          <p className="text-xs text-muted-foreground">
+            {batchState?.statusMessage || t('scheduleSend.sending')}
+          </p>
+
+          {/* Progress Bar */}
+          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
             <div
-              className="h-1.5 rounded-full bg-primary transition-all duration-300"
-              style={{ width: `${progress}%` }}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                batchState?.status === 'paused'
+                  ? 'bg-amber-500'
+                  : batchState?.status === 'error'
+                    ? 'bg-destructive'
+                    : 'bg-primary'
+              }`}
+              style={{ width: `${batchState?.progressPercent ?? progress}%` }}
             />
           </div>
+
+          {/* Batch Metrics Pills */}
+          {batchState && batchState.totalBatches > 0 && (
+            <div className="grid grid-cols-3 gap-2 pt-1 text-center text-xs">
+              <div className="rounded-lg bg-muted/60 p-2 border border-border/50">
+                <span className="block text-muted-foreground">Batch</span>
+                <span className="font-semibold text-foreground">
+                  {batchState.currentBatch} / {batchState.totalBatches}
+                </span>
+              </div>
+              <div className="rounded-lg bg-emerald-500/10 p-2 border border-emerald-500/20">
+                <span className="block text-emerald-600 dark:text-emerald-400">Sent</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {batchState.sentCount}
+                </span>
+              </div>
+              <div className="rounded-lg bg-destructive/10 p-2 border border-destructive/20">
+                <span className="block text-destructive">Failed</span>
+                <span className="font-semibold text-destructive">
+                  {batchState.failedCount}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Failed batches notice */}
+          {batchState?.failedBatches && batchState.failedBatches.length > 0 && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-2.5 text-xs text-destructive space-y-1">
+              <div className="flex items-center gap-1.5 font-medium">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span>{batchState.failedBatches.length} batch(es) encountered network or delivery issues</span>
+              </div>
+              <div className="max-h-20 overflow-y-auto space-y-0.5 text-[11px] opacity-90 pl-5">
+                {batchState.failedBatches.map((fb) => (
+                  <div key={fb.batchIndex}>
+                    Batch #{fb.batchIndex} ({fb.recipientCount} recipients): {fb.error}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
