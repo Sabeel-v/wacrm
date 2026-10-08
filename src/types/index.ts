@@ -699,3 +699,32 @@ export interface QuickReply {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================================
+// Broadcast Button Tracking (migration 044)
+// ============================================================
+
+export interface BroadcastButtonClick {
+  id: string;
+  account_id: string;
+  broadcast_id: string;
+  contact_id: string | null;
+  button_index: number;
+  button_name: string;
+  button_type: string;
+  button_payload?: string | null;
+  inbound_message_id: string;
+  clicked_at: string;
+  created_at: string;
+}
+
+export interface BroadcastButtonAnalyticsItem {
+  buttonIndex: number;
+  buttonName: string;
+  buttonType: string;
+  trackable: boolean;
+  totalClicks: number;
+  uniqueUsers: number;
+  clickPercentage: number;
+}
+

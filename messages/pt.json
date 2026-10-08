@@ -675,6 +675,18 @@
       "cannotDeleteSending": "Não é possível excluir enquanto um disparo está sendo enviado",
       "deleteHover": "Excluir este disparo",
       "funnel": "Funil",
+      "buttonTracking": {
+        "title": "Rastreamento de Botões",
+        "buttonName": "Nome do Botão",
+        "buttonType": "Tipo de Botão",
+        "clicks": "Número de Cliques",
+        "clickPercentage": "Porcentagem de Cliques",
+        "users": "Usuários",
+        "download": "Baixar",
+        "downloading": "Baixando…",
+        "notTrackable": "Não rastreável diretamente",
+        "toastExportFailed": "Falha ao baixar usuários: {error}"
+      },
       "recipientsHeader": "Destinatários ({filtered} de {total})",
       "recipientsHeaderAll": "Destinatários ({total})",
       "allStatuses": "Todos os status",

@@ -675,6 +675,18 @@
       "cannotDeleteSending": "No se puede eliminar mientras una difusión se está enviando",
       "deleteHover": "Eliminar esta difusión",
       "funnel": "Embudo",
+      "buttonTracking": {
+        "title": "Seguimiento de Botones",
+        "buttonName": "Nombre del Botón",
+        "buttonType": "Tipo de Botón",
+        "clicks": "Número de Clics",
+        "clickPercentage": "Porcentaje de Clics",
+        "users": "Usuarios",
+        "download": "Descargar",
+        "downloading": "Descargando…",
+        "notTrackable": "No rastreable directamente",
+        "toastExportFailed": "Error al descargar usuarios: {error}"
+      },
       "recipientsHeader": "Destinatarios ({filtered} de {total})",
       "recipientsHeaderAll": "Destinatarios ({total})",
       "allStatuses": "Todos los estados",

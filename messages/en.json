@@ -681,6 +681,18 @@
       "cannotDeleteSending": "Cannot delete while a broadcast is actively sending",
       "deleteHover": "Delete this broadcast",
       "funnel": "Funnel",
+      "buttonTracking": {
+        "title": "Button Tracking",
+        "buttonName": "Button Name",
+        "buttonType": "Button Type",
+        "clicks": "Number of Clicks",
+        "clickPercentage": "Click Percentage",
+        "users": "Users",
+        "download": "Download",
+        "downloading": "Downloading…",
+        "notTrackable": "Not directly trackable",
+        "toastExportFailed": "Failed to download users: {error}"
+      },
       "recipientsHeader": "Recipients ({filtered} of {total})",
       "recipientsHeaderAll": "Recipients ({total})",
       "allStatuses": "All statuses",

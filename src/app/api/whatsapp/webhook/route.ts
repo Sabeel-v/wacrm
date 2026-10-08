@@ -22,6 +22,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { recordBroadcastButtonClickIfAny } from '@/lib/whatsapp/broadcast-button-tracking'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -856,6 +857,15 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // Record broadcast button click if this inbound was a template button click
+  // that directly replies to a broadcast recipient (migration 044).
+  await recordBroadcastButtonClickIfAny(
+    supabaseAdmin(),
+    accountId,
+    contactRecord.id,
+    message
+  )
 
   // ============================================================
   // Flow runner dispatch.

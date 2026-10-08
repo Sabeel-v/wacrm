@@ -163,6 +163,20 @@ export default function BroadcastDetailPage() {
   const [resumingScope, setResumingScope] = useState<
     'pending' | 'failed' | null
   >(null);
+  const [buttons, setButtons] = useState<{
+    buttonIndex: number;
+    buttonName: string;
+    buttonType: string;
+    rawType: string;
+    trackable: boolean;
+    totalClicks: number;
+    uniqueUsers: number;
+    clickPercentage: number;
+  }[]>([]);
+  const [hasButtons, setHasButtons] = useState(false);
+  const [downloadingButtonIndex, setDownloadingButtonIndex] = useState<
+    number | null
+  >(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -185,6 +199,19 @@ export default function BroadcastDetailPage() {
 
       if (recsError) throw recsError;
       setRecipients(recs ?? []);
+
+      try {
+        const btnRes = await fetch(
+          `/api/whatsapp/broadcast/${broadcastId}/buttons`
+        );
+        if (btnRes.ok) {
+          const btnData = await btnRes.json();
+          setHasButtons(btnData.hasButtons === true);
+          setButtons(btnData.buttons ?? []);
+        }
+      } catch (btnErr) {
+        console.warn('Failed to fetch button tracking analytics:', btnErr);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t('notFound'));
     } finally {
@@ -227,6 +254,45 @@ export default function BroadcastDetailPage() {
     const csv = toCsv([header, ...rows]);
     const safeName = broadcast.name.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
     downloadBlob(`broadcast-${safeName}-${broadcastId.slice(0, 8)}.csv`, csv);
+  }
+
+  async function handleDownloadButtonUsers(
+    buttonIndex: number,
+    buttonName: string
+  ) {
+    setDownloadingButtonIndex(buttonIndex);
+    try {
+      const res = await fetch(
+        `/api/whatsapp/broadcast/${broadcastId}/buttons/${buttonIndex}/export`
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition');
+      let filename = `broadcast-${broadcastId.slice(0, 8)}-${buttonName.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}-users.csv`;
+      if (disposition && disposition.includes('filename="')) {
+        const match = disposition.match(/filename="([^"]+)"/);
+        if (match?.[1]) filename = match[1];
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(
+        t('buttonTracking.toastExportFailed', {
+          error: err instanceof Error ? err.message : 'Unknown error',
+        })
+      );
+    } finally {
+      setDownloadingButtonIndex(null);
+    }
   }
 
   /**
@@ -505,6 +571,100 @@ export default function BroadcastDetailPage() {
       </div>
 
       <FunnelChart steps={funnelSteps} />
+
+      {/* Button Tracking */}
+      {hasButtons && buttons.length > 0 && (
+        <div className="rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-4 py-3">
+            <h2 className="text-sm font-medium text-foreground">
+              {t('buttonTracking.title')}
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-muted-foreground">
+                    {t('buttonTracking.buttonName')}
+                  </TableHead>
+                  <TableHead className="text-muted-foreground">
+                    {t('buttonTracking.buttonType')}
+                  </TableHead>
+                  <TableHead className="text-right text-muted-foreground">
+                    {t('buttonTracking.clicks')}
+                  </TableHead>
+                  <TableHead className="text-right text-muted-foreground">
+                    {t('buttonTracking.clickPercentage')}
+                  </TableHead>
+                  <TableHead className="text-right text-muted-foreground">
+                    {t('buttonTracking.users')}
+                  </TableHead>
+                  <TableHead className="text-right text-muted-foreground">
+                    {t('buttonTracking.download')}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buttons.map((btn) => (
+                  <TableRow key={btn.buttonIndex} className="border-border">
+                    <TableCell className="font-medium text-foreground">
+                      {btn.buttonName}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        {btn.buttonType}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-foreground">
+                      {btn.trackable ? btn.totalClicks.toLocaleString() : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-foreground">
+                      {btn.trackable ? `${btn.clickPercentage.toFixed(1)}%` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-foreground">
+                      {btn.trackable ? btn.uniqueUsers.toLocaleString() : '—'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {btn.trackable ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={
+                            btn.uniqueUsers === 0 ||
+                            downloadingButtonIndex === btn.buttonIndex
+                          }
+                          onClick={() =>
+                            handleDownloadButtonUsers(
+                              btn.buttonIndex,
+                              btn.buttonName
+                            )
+                          }
+                          className="h-8 border-border text-muted-foreground hover:bg-muted disabled:opacity-40"
+                        >
+                          {downloadingButtonIndex === btn.buttonIndex ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          <span>
+                            {downloadingButtonIndex === btn.buttonIndex
+                              ? t('buttonTracking.downloading')
+                              : t('buttonTracking.download')}
+                          </span>
+                        </Button>
+                      ) : (
+                        <span className="text-xs italic text-muted-foreground">
+                          {t('buttonTracking.notTrackable')}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       {/* Recipients Table */}
       <div className="rounded-xl border border-border bg-card">
