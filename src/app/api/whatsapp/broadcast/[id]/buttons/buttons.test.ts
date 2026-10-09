@@ -166,13 +166,13 @@ describe('Broadcast Buttons Analytics & Export API', () => {
         clickPercentage: 18.0,
       });
 
-      // Button 1 (URL): not trackable via webhook
+      // Button 1 (URL): trackable via URL redirect tracking
       expect(body.buttons[1]).toEqual({
         buttonIndex: 1,
         buttonName: 'Visit Website',
         buttonType: 'URL',
         rawType: 'URL',
-        trackable: false,
+        trackable: true,
         totalClicks: 0,
         uniqueUsers: 0,
         clickPercentage: 0,

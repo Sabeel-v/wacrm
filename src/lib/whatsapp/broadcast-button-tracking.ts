@@ -108,27 +108,17 @@ export interface IsButtonTrackableOptions {
 }
 
 /**
- * Quick Reply buttons are tracked via inbound WhatsApp webhooks.
- * URL buttons are tracked via Method 2 (URL Redirect Tracking) when they have
- * dynamic URL variables, URL tokens generated, or recorded clicks.
+ * Quick Reply buttons and URL buttons are trackable.
+ * - Quick Reply buttons: tracked via inbound WhatsApp webhooks.
+ * - URL buttons: tracked via URL redirect tracking (/r/[token]).
+ * Phone Number and Copy Code buttons are device-native and not trackable.
  */
 export function isButtonTrackable(
   type: string,
-  options?: IsButtonTrackableOptions
+  _options?: IsButtonTrackableOptions
 ): boolean {
   const upper = type?.toUpperCase();
-  if (upper === 'QUICK_REPLY') return true;
-  if (upper === 'URL') {
-    if (options) {
-      if ((options.totalClicks ?? 0) > 0) return true;
-      if (options.hasTokens) return true;
-      if (options.url && extractVariableIndices(options.url).length > 0) return true;
-      return false;
-    }
-    // Default without options: static URL without token info is untracked
-    return false;
-  }
-  return false;
+  return upper === 'QUICK_REPLY' || upper === 'URL';
 }
 
 /**

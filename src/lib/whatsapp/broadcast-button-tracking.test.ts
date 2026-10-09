@@ -20,10 +20,10 @@ describe('broadcast-button-tracking helper functions', () => {
     expect(humanizeButtonType('other')).toBe('other');
   });
 
-  it('isButtonTrackable marks only quick replies as trackable via webhook', () => {
+  it('isButtonTrackable marks quick replies and URLs as trackable', () => {
     expect(isButtonTrackable('QUICK_REPLY')).toBe(true);
     expect(isButtonTrackable('quick_reply')).toBe(true);
-    expect(isButtonTrackable('URL')).toBe(false);
+    expect(isButtonTrackable('URL')).toBe(true);
     expect(isButtonTrackable('PHONE_NUMBER')).toBe(false);
     expect(isButtonTrackable('COPY_CODE')).toBe(false);
   });
@@ -228,23 +228,12 @@ describe('Method 2: URL redirect tracking helpers', () => {
     expect(token).not.toContain(' ');
   });
 
-  it('isButtonTrackable identifies URL buttons with clicks or tokens as trackable', async () => {
+  it('isButtonTrackable identifies URL buttons as trackable', async () => {
     const { isButtonTrackable } = await import('./broadcast-button-tracking');
-    // Default URL is false
-    expect(isButtonTrackable('URL')).toBe(false);
-    expect(isButtonTrackable('URL', {})).toBe(false);
-
-    // URL with clicks is true
-    expect(isButtonTrackable('URL', { totalClicks: 5 })).toBe(true);
-
-    // URL with tokens is true
-    expect(isButtonTrackable('URL', { hasTokens: true })).toBe(true);
-
-    // URL with dynamic template {{1}} is true
-    expect(isButtonTrackable('URL', { url: 'https://crm.com/r/{{1}}' })).toBe(true);
-
-    // Static URL without clicks or tokens is false
-    expect(isButtonTrackable('URL', { url: 'https://example.com', totalClicks: 0, hasTokens: false })).toBe(false);
+    expect(isButtonTrackable('URL')).toBe(true);
+    expect(isButtonTrackable('url')).toBe(true);
+    expect(isButtonTrackable('QUICK_REPLY')).toBe(true);
+    expect(isButtonTrackable('PHONE_NUMBER')).toBe(false);
   });
 
   it('recordBroadcastUrlClick successfully looks up token and inserts click', async () => {
