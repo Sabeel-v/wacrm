@@ -100,6 +100,28 @@ export async function GET(
 
     const clicks = (rawClicks ?? []) as unknown as ContactClickRow[];
 
+    // Fallback phone lookup from broadcast_url_tokens if contact phone is absent
+    const tokenPhoneMap = new Map<string, string>();
+    const hasMissingPhone = clicks.some((c) => !c.contact?.phone);
+    if (hasMissingPhone) {
+      try {
+        const { data: urlTokenRows } = await supabase
+          .from('broadcast_url_tokens')
+          .select('contact_id, recipient_phone')
+          .eq('account_id', accountId)
+          .eq('broadcast_id', broadcastId)
+          .eq('button_index', buttonIndex);
+
+        for (const tr of (urlTokenRows ?? []) as Array<{ contact_id: string | null; recipient_phone: string | null }>) {
+          if (tr.contact_id && tr.recipient_phone) {
+            tokenPhoneMap.set(tr.contact_id, tr.recipient_phone);
+          }
+        }
+      } catch {
+        // Safe fallback if table is omitted in mocks
+      }
+    }
+
     // 4. Aggregate to UNIQUE USERS
     // A single contact may have clicked multiple times. We collapse by contact_id
     // to record first/last clicked timestamps and total clicks count.
@@ -123,7 +145,7 @@ export async function GET(
       const clickedTime = c.clicked_at;
 
       const name = c.contact?.name ?? '';
-      const phone = c.contact?.phone ?? '';
+      const phone = c.contact?.phone || (c.contact_id ? tokenPhoneMap.get(c.contact_id) : '') || '';
       const email = c.contact?.email ?? '';
       const rowBtnName = c.button_name || buttonLabel;
       const rowBtnType = humanizeButtonType(c.button_type || buttonType);

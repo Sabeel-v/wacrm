@@ -316,5 +316,91 @@ describe('Broadcast Buttons Analytics & Export API', () => {
       expect(lines[2]).toContain('Jane Smith');
       expect(lines[2]).toContain('1'); // Total clicks 1
     });
+
+    it('exports unique users for URL button clicks (Method 2)', async () => {
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'broadcasts') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: {
+                        id: 'bc-url-1234',
+                        name: 'Website Campaign',
+                        template_name: 'website_tmpl',
+                        template_language: 'en_US',
+                      },
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === 'broadcast_button_clicks') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    eq: vi.fn().mockReturnValue({
+                      order: vi.fn().mockResolvedValue({
+                        data: [
+                          {
+                            contact_id: 'cnt-url-1',
+                            button_name: 'Visit Website',
+                            button_type: 'URL',
+                            clicked_at: '2026-10-09T10:00:00Z',
+                            contact: {
+                              id: 'cnt-url-1',
+                              name: 'Target Customer',
+                              phone: '+918075114287',
+                              email: 'customer@example.com',
+                            },
+                          },
+                        ],
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      (requireRole as any).mockResolvedValue({
+        supabase: mockSupabase,
+        accountId: 'acc-1',
+        userId: 'usr-1',
+      });
+
+      (resolveTemplateRow as any).mockResolvedValue({
+        row: {
+          name: 'website_tmpl',
+          buttons: [{ type: 'URL', text: 'Visit Website', url: 'https://example.com/r/{{1}}' }],
+        },
+      });
+
+      const req = new NextRequest(
+        'http://localhost/api/whatsapp/broadcast/bc-url-1234/buttons/0/export'
+      );
+      const res = await exportButtonUsers(req, {
+        params: Promise.resolve({ id: 'bc-url-1234', buttonIndex: '0' }),
+      });
+
+      expect(res.status).toBe(200);
+      const csvText = await res.text();
+      const lines = csvText.split('\r\n');
+
+      expect(lines).toHaveLength(2); // Header + 1 user
+      expect(lines[1]).toContain('Target Customer');
+      expect(lines[1]).toContain('+918075114287');
+      expect(lines[1]).toContain('URL');
+      expect(lines[1]).toContain('Visit Website');
+    });
   });
 });

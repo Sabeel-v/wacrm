@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Contact, CustomField, MessageTemplate } from '@/types';
+import { Contact, CustomField, MessageTemplate, TemplateButton } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -12,8 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, ImageIcon, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { extractVariableIndices } from '@/lib/whatsapp/template-validators';
 
 type VariableType = 'static' | 'field' | 'custom_field';
 
@@ -29,6 +30,8 @@ interface Step3Props {
   /** Media URL for an IMAGE/VIDEO/DOCUMENT header, when the template has one. */
   headerMediaUrl: string;
   onHeaderMediaUrlChange: (url: string) => void;
+  urlDestinations?: Record<number, string>;
+  onUrlDestinationsChange?: (destinations: Record<number, string>) => void;
   onNext: () => void;
   onBack: () => void;
 }
@@ -73,6 +76,8 @@ export function Step3Personalize({
   onUpdate,
   headerMediaUrl,
   onHeaderMediaUrlChange,
+  urlDestinations,
+  onUrlDestinationsChange,
   onNext,
   onBack,
 }: Step3Props) {
@@ -160,6 +165,15 @@ export function Step3Personalize({
     if (!isValidHttpUrl(value)) return 'invalid';
     return null;
   }, [mediaHeaderType, headerMediaUrl]);
+
+  const dynamicUrlButtons = useMemo(() => {
+    return (template.buttons ?? [])
+      .map((btn, index) => ({ btn, index }))
+      .filter(
+        (item): item is { btn: Extract<TemplateButton, { type: 'URL' }>; index: number } =>
+          item.btn.type === 'URL' && extractVariableIndices(item.btn.url).length > 0
+      );
+  }, [template.buttons]);
 
   /**
    * A placeholder is "unmapped" if the user hasn't picked either a
@@ -284,7 +298,51 @@ export function Step3Personalize({
         </div>
       )}
 
-      {placeholders.length === 0 && !mediaHeaderType ? (
+      {dynamicUrlButtons.length > 0 && (
+        <div className="space-y-3">
+          {dynamicUrlButtons.map(({ btn, index }) => {
+            const currentDest = urlDestinations?.[index] ?? btn.example ?? '';
+            return (
+              <div
+                key={index}
+                className="rounded-xl border border-border bg-card/50 p-4"
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <LinkIcon className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-medium text-foreground">
+                    Button Tracking Destination: {btn.text}
+                  </p>
+                  <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium uppercase text-primary">
+                    URL Button
+                  </span>
+                </div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Target Website URL
+                </label>
+                <Input
+                  type="url"
+                  value={currentDest}
+                  onChange={(e) => {
+                    if (onUrlDestinationsChange) {
+                      onUrlDestinationsChange({
+                        ...(urlDestinations ?? {}),
+                        [index]: e.target.value,
+                      });
+                    }
+                  }}
+                  placeholder="https://yourwebsite.com"
+                  className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  When recipients tap &quot;{btn.text}&quot;, their click and phone number will be recorded in Button Tracking before redirecting them to this website.
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {placeholders.length === 0 && !mediaHeaderType && dynamicUrlButtons.length === 0 ? (
         <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
           <p className="text-sm text-muted-foreground">
             {t('personalize.noPreview')}

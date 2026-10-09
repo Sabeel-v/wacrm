@@ -681,6 +681,18 @@
       "cannotDeleteSending": "브로드캐스트가 전송 중일 때는 삭제할 수 없습니다",
       "deleteHover": "이 브로드캐스트 삭제",
       "funnel": "퍼널",
+      "buttonTracking": {
+        "title": "버튼 추적",
+        "buttonName": "버튼 이름",
+        "buttonType": "버튼 유형",
+        "clicks": "클릭 수",
+        "clickPercentage": "클릭률",
+        "users": "사용자",
+        "download": "다운로드",
+        "downloading": "다운로드 중…",
+        "notTrackable": "직접 추적 불가",
+        "toastExportFailed": "사용자 다운로드 실패: {error}"
+      },
       "recipientsHeader": "수신자 (전체 {total}명 중 {filtered}명)",
       "recipientsHeaderAll": "수신자 ({total}명)",
       "allStatuses": "모든 상태",

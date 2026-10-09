@@ -8,7 +8,10 @@ import {
   batchRetryDelayMs,
 } from '@/lib/broadcast-retry';
 import { normalizeKey } from '@/lib/contacts/dedupe';
-import { Contact, MessageTemplate } from '@/types';
+import { Contact, MessageTemplate, TemplateButton } from '@/types';
+import { generateTrackingToken } from '@/lib/whatsapp/broadcast-button-tracking';
+import { extractVariableIndices } from '@/lib/whatsapp/template-validators';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 
 export type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 
@@ -39,7 +42,7 @@ export type VariableMapping =
   | { type: 'field'; value: string }
   | { type: 'custom_field'; value: string };
 
-interface BroadcastPayload {
+export interface BroadcastPayload {
   name: string;
   template: MessageTemplate;
   audience: AudienceConfig;
@@ -51,6 +54,11 @@ interface BroadcastPayload {
    * falls back to the template's stored URL only when this is empty.
    */
   headerMediaUrl?: string;
+  /**
+   * Method 2 (URL Redirect Tracking): Mapping of buttonIndex to
+   * destination website URL for dynamic URL buttons.
+   */
+  urlDestinations?: Record<number, string>;
 }
 
 export interface BroadcastBatchState {
@@ -559,6 +567,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       const totalRecipients = recipients.length;
 
       // Media-header templates (image/video/document) require a media
+      // Media-header templates (image/video/document) require a media
       // URL on every send. Collected in the personalize step and applied
       // to all recipients; falls back to the template's stored URL on the
       // server when omitted.
@@ -568,8 +577,81 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         headerType === 'video' ||
         headerType === 'document';
       const headerMediaUrl = payload.headerMediaUrl?.trim();
-      const messageParams =
-        isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
+      const baseMessageParams: SendTimeParams =
+        isMediaHeader && headerMediaUrl ? { headerMediaUrl } : {};
+
+      // Method 2 (URL Redirect Tracking):
+      // Check for dynamic URL buttons (buttons with {{1}} suffix).
+      // For each recipient, generate unique tracking tokens and record them
+      // in broadcast_url_tokens for click-attribution and redirecting.
+      const dynamicUrlButtons = (payload.template.buttons ?? [])
+        .map((btn, index) => ({ btn, index }))
+        .filter(
+          (item): item is { btn: Extract<TemplateButton, { type: 'URL' }>; index: number } =>
+            item.btn.type === 'URL' && extractVariableIndices(item.btn.url).length > 0
+        );
+
+      const tokensByContactId = new Map<string, Record<number, string>>();
+
+      if (dynamicUrlButtons.length > 0) {
+        const urlTokenRows: Array<{
+          account_id: string;
+          broadcast_id: string;
+          contact_id: string;
+          recipient_phone: string | null;
+          button_index: number;
+          button_name: string;
+          token: string;
+          destination_url: string;
+        }> = [];
+
+        for (const r of recipients) {
+          const contactId = r.contact_id;
+          if (!contactId) continue;
+          const buttonTokens: Record<number, string> = {};
+
+          for (const { btn, index } of dynamicUrlButtons) {
+            const token = generateTrackingToken();
+            buttonTokens[index] = token;
+
+            let destUrl =
+              payload.urlDestinations?.[index]?.trim() ||
+              btn.example?.trim() ||
+              '';
+            if (!destUrl && btn.url) {
+              destUrl = btn.url.replace(/\{\{\d+\}\}/g, '').trim();
+            }
+            if (!destUrl) {
+              destUrl = 'https://example.com';
+            }
+
+            urlTokenRows.push({
+              account_id: accountId,
+              broadcast_id: broadcast.id,
+              contact_id: contactId,
+              recipient_phone: r.contact?.phone ?? null,
+              button_index: index,
+              button_name: btn.text,
+              token,
+              destination_url: destUrl,
+            });
+          }
+
+          tokensByContactId.set(contactId, buttonTokens);
+        }
+
+        if (urlTokenRows.length > 0) {
+          for (let i = 0; i < urlTokenRows.length; i += INSERT_BATCH_SIZE) {
+            const batchSlice = urlTokenRows.slice(i, i + INSERT_BATCH_SIZE);
+            const { error: tokenInsertErr } = await supabase
+              .from('broadcast_url_tokens')
+              .insert(batchSlice);
+            if (tokenInsertErr) {
+              console.error('[broadcast-sending] Failed to insert URL tokens:', tokenInsertErr.message);
+            }
+          }
+        }
+      }
 
       // ── Step 4: Chunked Sequential Sending ───────────────────────
       const batches = chunkArray(recipients, CHUNK_SIZE);
@@ -615,13 +697,26 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
 
         const apiRecipients = batch
           .filter((r) => r.contact?.phone)
-          .map((r) => ({
-            phone: r.contact!.phone as string,
-            // Read back off the row rather than re-resolved, so this
-            // pass and any later resume send identical params.
-            params: Array.isArray(r.template_params) ? r.template_params : [],
-            ...(messageParams ? { messageParams } : {}),
-          }));
+          .map((r) => {
+            const buttonTokens = r.contact_id
+              ? tokensByContactId.get(r.contact_id)
+              : undefined;
+
+            const recipientMessageParams: SendTimeParams = {
+              ...baseMessageParams,
+              ...(buttonTokens ? { buttonParams: buttonTokens } : {}),
+            };
+
+            const hasParams = Object.keys(recipientMessageParams).length > 0;
+
+            return {
+              phone: r.contact!.phone as string,
+              // Read back off the row rather than re-resolved, so this
+              // pass and any later resume send identical params.
+              params: Array.isArray(r.template_params) ? r.template_params : [],
+              ...(hasParams ? { messageParams: recipientMessageParams } : {}),
+            };
+          });
 
         if (apiRecipients.length === 0) {
           currentIndex++;

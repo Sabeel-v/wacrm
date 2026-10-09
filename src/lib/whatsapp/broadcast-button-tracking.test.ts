@@ -219,3 +219,102 @@ describe('recordBroadcastButtonClickIfAny attribution logic', () => {
     );
   });
 });
+
+describe('Method 2: URL redirect tracking helpers', () => {
+  it('generateTrackingToken produces a clean URL-safe token', async () => {
+    const { generateTrackingToken } = await import('./broadcast-button-tracking');
+    const token = generateTrackingToken();
+    expect(token).toMatch(/^t[a-z0-9]{9}$/);
+    expect(token).not.toContain(' ');
+  });
+
+  it('isButtonTrackable identifies URL buttons with clicks or tokens as trackable', async () => {
+    const { isButtonTrackable } = await import('./broadcast-button-tracking');
+    // Default URL is false
+    expect(isButtonTrackable('URL')).toBe(false);
+    expect(isButtonTrackable('URL', {})).toBe(false);
+
+    // URL with clicks is true
+    expect(isButtonTrackable('URL', { totalClicks: 5 })).toBe(true);
+
+    // URL with tokens is true
+    expect(isButtonTrackable('URL', { hasTokens: true })).toBe(true);
+
+    // URL with dynamic template {{1}} is true
+    expect(isButtonTrackable('URL', { url: 'https://crm.com/r/{{1}}' })).toBe(true);
+
+    // Static URL without clicks or tokens is false
+    expect(isButtonTrackable('URL', { url: 'https://example.com', totalClicks: 0, hasTokens: false })).toBe(false);
+  });
+
+  it('recordBroadcastUrlClick successfully looks up token and inserts click', async () => {
+    const { recordBroadcastUrlClick } = await import('./broadcast-button-tracking');
+    const insertSpy = vi.fn().mockResolvedValue({ error: null });
+
+    const db = {
+      from: vi.fn((table: string) => {
+        if (table === 'broadcast_url_tokens') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: 'tok-row-1',
+                    account_id: 'acc-1',
+                    broadcast_id: 'bc-1',
+                    contact_id: 'cnt-1',
+                    button_index: 0,
+                    button_name: 'Visit Website',
+                    destination_url: 'https://mssolutionslearning.com',
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'broadcast_button_clicks') {
+          return {
+            insert: insertSpy,
+          };
+        }
+        return {};
+      }),
+    } as unknown as any;
+
+    const result = await recordBroadcastUrlClick(db, 'tok_123');
+    expect(result.destinationUrl).toBe('https://mssolutionslearning.com');
+    expect(insertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        account_id: 'acc-1',
+        broadcast_id: 'bc-1',
+        contact_id: 'cnt-1',
+        button_index: 0,
+        button_name: 'Visit Website',
+        button_type: 'URL',
+        button_payload: 'https://mssolutionslearning.com',
+      })
+    );
+  });
+
+  it('recordBroadcastUrlClick returns error when token is not found', async () => {
+    const { recordBroadcastUrlClick } = await import('./broadcast-button-tracking');
+    const db = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: null,
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    } as unknown as any;
+
+    const result = await recordBroadcastUrlClick(db, 'non_existent');
+    expect(result.destinationUrl).toBeNull();
+    expect(result.error).toBe('Token not found');
+  });
+});
+

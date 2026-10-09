@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { MessageTemplate, TemplateButton } from '@/types';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
+import { extractVariableIndices } from './template-validators';
 
 export interface WhatsAppButtonMessageLike {
   id: string;
@@ -88,11 +89,91 @@ export function humanizeButtonType(type: string): string {
 }
 
 /**
- * WhatsApp only delivers webhooks for Quick Reply buttons and interactive replies.
- * URL / Phone / Copy Code are not directly trackable via webhook.
+ * Generate a short, URL-safe tracking token for dynamic URL button clicks.
+ * Safe for Meta WhatsApp Cloud API button parameter constraints (no spaces or special chars).
  */
-export function isButtonTrackable(type: string): boolean {
-  return type?.toUpperCase() === 'QUICK_REPLY';
+export function generateTrackingToken(): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let token = 't';
+  for (let i = 0; i < 9; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
+export interface IsButtonTrackableOptions {
+  url?: string;
+  totalClicks?: number;
+  hasTokens?: boolean;
+}
+
+/**
+ * Quick Reply buttons are tracked via inbound WhatsApp webhooks.
+ * URL buttons are tracked via Method 2 (URL Redirect Tracking) when they have
+ * dynamic URL variables, URL tokens generated, or recorded clicks.
+ */
+export function isButtonTrackable(
+  type: string,
+  options?: IsButtonTrackableOptions
+): boolean {
+  const upper = type?.toUpperCase();
+  if (upper === 'QUICK_REPLY') return true;
+  if (upper === 'URL') {
+    if (options) {
+      if ((options.totalClicks ?? 0) > 0) return true;
+      if (options.hasTokens) return true;
+      if (options.url && extractVariableIndices(options.url).length > 0) return true;
+      return false;
+    }
+    // Default without options: static URL without token info is untracked
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Record a URL redirect click from /r/[token] and return the destination URL.
+ * Never throws; strictly decoupled and safe.
+ */
+export async function recordBroadcastUrlClick(
+  db: SupabaseClient,
+  token: string
+): Promise<{ destinationUrl: string | null; error?: string }> {
+  try {
+    const { data: tokenRow, error: tokenErr } = await db
+      .from('broadcast_url_tokens')
+      .select('id, account_id, broadcast_id, contact_id, button_index, button_name, destination_url')
+      .eq('token', token)
+      .maybeSingle();
+
+    if (tokenErr || !tokenRow) {
+      return { destinationUrl: null, error: tokenErr?.message || 'Token not found' };
+    }
+
+    const clickId = `url_${token}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    await db
+      .from('broadcast_button_clicks')
+      .insert({
+        account_id: tokenRow.account_id,
+        broadcast_id: tokenRow.broadcast_id,
+        contact_id: tokenRow.contact_id,
+        button_index: tokenRow.button_index,
+        button_name: tokenRow.button_name,
+        button_type: 'URL',
+        button_payload: tokenRow.destination_url,
+        inbound_message_id: clickId,
+        clicked_at: new Date().toISOString(),
+      });
+
+    return { destinationUrl: tokenRow.destination_url };
+  } catch (err) {
+    console.error('[broadcast-button-tracking] Failed to record URL click:', err);
+    return {
+      destinationUrl: null,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
 }
 
 /**

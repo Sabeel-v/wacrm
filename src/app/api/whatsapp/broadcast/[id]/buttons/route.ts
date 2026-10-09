@@ -105,10 +105,26 @@ export async function GET(
       }
     }
 
+    // Check if any tracking tokens exist for buttons in this broadcast
+    const { data: tokenRows } = await supabase
+      .from('broadcast_url_tokens')
+      .select('button_index')
+      .eq('account_id', accountId)
+      .eq('broadcast_id', broadcastId);
+
+    const tokenButtonIndices = new Set(
+      (tokenRows ?? []).map((r: { button_index: number }) => Number(r.button_index))
+    );
+
     // 4. Assemble final stats for each button
     const buttons = rawButtons.map((btn, index) => {
-      const trackable = isButtonTrackable(btn.type);
       const stat = statsMap.get(index) ?? { totalClicks: 0, uniqueUsers: 0 };
+      const buttonUrl = btn.type === 'URL' ? btn.url : undefined;
+      const trackable = isButtonTrackable(btn.type, {
+        url: buttonUrl,
+        totalClicks: stat.totalClicks,
+        hasTokens: tokenButtonIndices.has(index),
+      });
       const totalClicks = trackable ? stat.totalClicks : 0;
       const uniqueUsers = trackable ? stat.uniqueUsers : 0;
       const clickPercentage = trackable
