@@ -28,12 +28,12 @@ export interface CustomFieldInputProps {
  */
 export function getFieldOptions(field: CustomField): string[] {
   if (!field.field_options) return [];
-  const raw = field.field_options.options;
+  const raw: unknown = field.field_options.options;
   if (Array.isArray(raw)) {
-    return raw.map((item) => String(item).trim()).filter(Boolean);
+    return raw.map((item: unknown) => String(item).trim()).filter(Boolean);
   }
   if (typeof raw === 'string') {
-    return raw.split(',').map((item) => item.trim()).filter(Boolean);
+    return raw.split(',').map((item: string) => item.trim()).filter(Boolean);
   }
   return [];
 }
