@@ -391,7 +391,9 @@
       "dupSimilar": "A contact with a very similar number already exists.",
       "loadingTags": "Loading tags...",
       "noTagsAvailable": "No tags available. Create tags in Settings.",
-      "phoneRequired": "Phone number is required"
+      "phoneRequired": "Phone number is required",
+      "customFieldsLabel": "Custom Fields",
+      "loadingCustomFields": "Loading custom fields..."
     },
     "detailView": {
       "tabs": {
@@ -520,7 +522,19 @@
       "toastCreated": "Created \"{name}\".",
       "toastRenameFailed": "Could not rename field.",
       "toastDeleteFailed": "Could not delete field.",
-      "toastDeleted": "Deleted \"{name}\"."
+      "toastDeleted": "Deleted \"{name}\".",
+      "typeLabel": "Field type",
+      "typeText": "Text",
+      "typeNumber": "Number",
+      "typeEmail": "Email",
+      "typePhone": "Phone",
+      "typeDate": "Date",
+      "typeDropdown": "Dropdown",
+      "optionsPlaceholder": "Options (comma-separated, e.g. Plus One, Plus Two)",
+      "optionsLabel": "Options",
+      "editField": "Configure field",
+      "saveField": "Save",
+      "toastUpdateFailed": "Could not update field."
     }
   },
   "Pipelines": {

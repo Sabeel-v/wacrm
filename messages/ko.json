@@ -391,7 +391,9 @@
       "dupSimilar": "매우 유사한 번호를 가진 연락처가 이미 있습니다.",
       "loadingTags": "태그를 불러오는 중...",
       "noTagsAvailable": "사용 가능한 태그가 없습니다. 설정에서 태그를 만드세요.",
-      "phoneRequired": "전화번호는 필수입니다"
+      "phoneRequired": "전화번호는 필수입니다",
+      "customFieldsLabel": "사용자 정의 필드",
+      "loadingCustomFields": "사용자 정의 필드를 불러오는 중..."
     },
     "detailView": {
       "tabs": {
@@ -520,7 +522,19 @@
       "toastCreated": "\"{name}\"을(를) 만들었습니다.",
       "toastRenameFailed": "필드 이름을 변경할 수 없습니다.",
       "toastDeleteFailed": "필드를 삭제할 수 없습니다.",
-      "toastDeleted": "\"{name}\"을(를) 삭제했습니다."
+      "toastDeleted": "\"{name}\"을(를) 삭제했습니다.",
+      "typeLabel": "필드 유형",
+      "typeText": "텍스트",
+      "typeNumber": "숫자",
+      "typeEmail": "이메일",
+      "typePhone": "전화번호",
+      "typeDate": "날짜",
+      "typeDropdown": "드롭다운",
+      "optionsPlaceholder": "옵션 (쉼표로 구분, 예: Plus One, Plus Two)",
+      "optionsLabel": "옵션",
+      "editField": "필드 구성",
+      "saveField": "저장",
+      "toastUpdateFailed": "필드를 업데이트할 수 없습니다."
     }
   },
   "Pipelines": {

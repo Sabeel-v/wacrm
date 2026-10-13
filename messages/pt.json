@@ -391,7 +391,9 @@
       "dupSimilar": "Já existe um contato com um número muito parecido.",
       "loadingTags": "Carregando tags...",
       "noTagsAvailable": "Nenhuma tag disponível. Crie tags em Configurações.",
-      "phoneRequired": "O número de telefone é obrigatório"
+      "phoneRequired": "O número de telefone é obrigatório",
+      "customFieldsLabel": "Campos personalizados",
+      "loadingCustomFields": "Carregando campos personalizados..."
     },
     "detailView": {
       "tabs": {
@@ -520,7 +522,19 @@
       "toastCreated": "\"{name}\" criado.",
       "toastRenameFailed": "Não foi possível renomear o campo.",
       "toastDeleteFailed": "Não foi possível excluir o campo.",
-      "toastDeleted": "\"{name}\" excluído."
+      "toastDeleted": "\"{name}\" excluído.",
+      "typeLabel": "Tipo de campo",
+      "typeText": "Texto",
+      "typeNumber": "Número",
+      "typeEmail": "E-mail",
+      "typePhone": "Telefone",
+      "typeDate": "Data",
+      "typeDropdown": "Menu suspenso",
+      "optionsPlaceholder": "Opções (separadas por vírgula, ex: Plus One, Plus Two)",
+      "optionsLabel": "Opções",
+      "editField": "Configurar campo",
+      "saveField": "Salvar",
+      "toastUpdateFailed": "Não foi possível atualizar o campo."
     }
   },
   "Pipelines": {

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal, MessageTemplate } from '@/types';
+import { CustomFieldInput } from '@/components/contacts/custom-field-input';
 import {
   TemplatePicker,
   type TemplateSendValues,
@@ -659,16 +660,17 @@ export function ContactDetailView({
                         <Label className="text-muted-foreground text-xs capitalize">
                           {field.field_name}
                         </Label>
-                        <Input
+                        <CustomFieldInput
+                          field={field}
                           value={customValues[field.id] ?? ''}
-                          onChange={(e) =>
+                          onChange={(val) =>
                             setCustomValues((prev) => ({
                               ...prev,
-                              [field.id]: e.target.value,
+                              [field.id]: val,
                             }))
                           }
+                          disabled={savingCustom}
                           placeholder={t('enterCustomField', { name: field.field_name })}
-                          className="bg-muted border-border text-foreground h-8 text-sm placeholder:text-muted-foreground"
                         />
                       </div>
                     ))}

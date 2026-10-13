@@ -140,6 +140,14 @@ export interface ContactTag {
   tag_id: string;
 }
 
+export type CustomFieldType =
+  | 'text'
+  | 'number'
+  | 'email'
+  | 'phone'
+  | 'date'
+  | 'dropdown';
+
 export interface CustomField {
   id: string;
   user_id: string;
@@ -147,7 +155,7 @@ export interface CustomField {
   account_id: string;
   field_name: string;
   field_type: string;
-  field_options?: Record<string, unknown>;
+  field_options?: { options?: string[]; [key: string]: unknown } | null;
   created_at: string;
 }
 
