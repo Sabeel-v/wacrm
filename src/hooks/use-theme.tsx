@@ -15,7 +15,6 @@ import {
   MODE_STORAGE_KEY,
   STORAGE_KEY,
   isMode,
-  isThemeId,
   type Mode,
   type ThemeId,
 } from "@/lib/themes";
@@ -48,19 +47,10 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readInitialTheme(): ThemeId {
-  if (typeof window === "undefined") return DEFAULT_THEME;
-  // Whatever the boot script applied is the truth. Fall back to
-  // localStorage / default if for some reason the attribute is missing
-  // (e.g. someone bypassed the boot script in a custom layout).
-  const fromAttr = document.documentElement.dataset.theme;
-  if (isThemeId(fromAttr)) return fromAttr;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (isThemeId(stored)) return stored;
-  } catch {
-    // localStorage can throw in private-browsing / sandboxed contexts.
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.theme = "emerald";
   }
-  return DEFAULT_THEME;
+  return "emerald";
 }
 
 function readInitialMode(): Mode {
@@ -109,17 +99,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setMode(mode === "dark" ? "light" : "dark");
   }, [mode, setMode]);
 
-  // Sync from other tabs — change theme or mode in tab A, tab B
-  // catches up without a refresh.
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = "emerald";
+      try {
+        localStorage.setItem(STORAGE_KEY, "emerald");
+      } catch {}
+    }
+  }, []);
+
+  // Sync from other tabs — change mode in tab A, tab B catches up without a refresh.
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key === STORAGE_KEY) {
-        if (isThemeId(e.newValue) && e.newValue !== theme) {
-          setThemeState(e.newValue);
-          document.documentElement.dataset.theme = e.newValue;
-        }
-        return;
-      }
       if (e.key === MODE_STORAGE_KEY) {
         if (isMode(e.newValue) && e.newValue !== mode) {
           setModeState(e.newValue);
@@ -129,7 +120,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [theme, mode]);
+  }, [mode]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, mode, setMode, toggleMode }}>

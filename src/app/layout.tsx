@@ -11,8 +11,6 @@ import {
   DEFAULT_THEME,
   MODE_STORAGE_KEY,
   MODES,
-  STORAGE_KEY,
-  THEME_IDS,
 } from "@/lib/themes";
 
 const inter = Inter({
@@ -22,8 +20,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "MS SOLUTIONS",
-    template: "%s — MS SOLUTIONS",
+    default: "UPSWORK",
+    template: "%s — UPSWORK",
   },
   description: "Self-hostable CRM template for WhatsApp.",
   robots: {
@@ -65,11 +63,7 @@ const THEME_BOOT_SCRIPT = `
 (function(){
   var d = document.documentElement;
   try {
-    var THEME_KEY = ${JSON.stringify(STORAGE_KEY)};
-    var THEME_DEFAULT = ${JSON.stringify(DEFAULT_THEME)};
-    var THEMES = ${JSON.stringify(THEME_IDS)};
-    var savedTheme = localStorage.getItem(THEME_KEY);
-    d.dataset.theme = THEMES.indexOf(savedTheme) !== -1 ? savedTheme : THEME_DEFAULT;
+    d.dataset.theme = "emerald";
 
     var MODE_KEY = ${JSON.stringify(MODE_STORAGE_KEY)};
     var MODE_DEFAULT = ${JSON.stringify(DEFAULT_MODE)};
