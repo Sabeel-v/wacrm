@@ -25,6 +25,8 @@
     "broadcasts": "Disparos",
     "templates": "Modelos",
     "automations": "Automações",
+    "automation": "Automação",
+    "basicAutomation": "Automação básica",
     "flows": "Fluxos",
     "aiAgents": "Agentes de IA",
     "settings": "Configurações",

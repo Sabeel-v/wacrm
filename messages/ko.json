@@ -25,6 +25,8 @@
     "broadcasts": "브로드캐스트",
     "templates": "템플릿",
     "automations": "자동화",
+    "automation": "자동화",
+    "basicAutomation": "기본 자동화",
     "flows": "플로우",
     "aiAgents": "AI 에이전트",
     "settings": "설정",

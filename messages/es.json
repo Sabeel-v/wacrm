@@ -25,6 +25,8 @@
     "broadcasts": "Difusiones",
     "templates": "Plantillas",
     "automations": "Automatizaciones",
+    "automation": "Automatización",
+    "basicAutomation": "Automatización básica",
     "flows": "Flujos",
     "aiAgents": "Agentes de IA",
     "settings": "Configuración",

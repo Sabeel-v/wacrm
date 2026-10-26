@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import logo from "@/asset/logo.png";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
@@ -12,6 +12,7 @@ import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
   Bot,
+  ChevronDown,
   Crown,
   GitBranch,
   LayoutDashboard,
@@ -100,7 +101,10 @@ const navItems: NavItem[] = [
   { href: "/templates", labelKey: "templates", icon: LayoutTemplate },
   { href: "/contacts", labelKey: "contacts", icon: Users },
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
-  { href: "/automations", labelKey: "automations", icon: Zap },
+];
+
+const automationSubItems: NavItem[] = [
+  { href: "/automations", labelKey: "basicAutomation", icon: Zap },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
   { href: "/agents", labelKey: "aiAgents", icon: Bot },
 ];
@@ -119,6 +123,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
+
+  const isChildActive =
+    pathname.startsWith("/automations") ||
+    pathname.startsWith("/flows") ||
+    pathname.startsWith("/agents");
+
+  const [isAutomationOpen, setIsAutomationOpen] = useState(isChildActive);
+
+  // Automatically expand Automation when any of its child pages is active
+  useEffect(() => {
+    if (isChildActive) {
+      setIsAutomationOpen(true);
+    } else {
+      setIsAutomationOpen(false);
+    }
+  }, [isChildActive, pathname]);
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -271,6 +291,65 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 </li>
               );
             })}
+
+            {/* Expandable Automation Menu */}
+            <li>
+              <button
+                type="button"
+                onClick={() => setIsAutomationOpen((prev) => !prev)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                  isChildActive
+                    ? "text-foreground font-semibold hover:bg-muted/50"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                aria-expanded={isAutomationOpen}
+              >
+                <Zap className="h-4 w-4" />
+                <span className="flex-1 text-left">{t("automation")}</span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                    isAutomationOpen && "rotate-180",
+                  )}
+                />
+              </button>
+
+              {isAutomationOpen && (
+                <ul className="mt-1 flex flex-col gap-1 pl-3">
+                  {automationSubItems.map((item) => {
+                    const isActive =
+                      pathname === item.href ||
+                      pathname.startsWith(item.href);
+
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                            isActive
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          )}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span className="flex-1">{t(item.labelKey as string)}</span>
+                          {item.beta && (
+                            <span
+                              aria-label={t("beta")}
+                              className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                            >
+                              {t("beta")}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
           </ul>
         </nav>
 
