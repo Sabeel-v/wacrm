@@ -716,6 +716,23 @@
         "notTrackable": "No rastreable directamente",
         "toastExportFailed": "Error al descargar usuarios: {error}"
       },
+      "templatePreview": {
+        "title": "Vista previa de la plantilla",
+        "templateName": "Nombre de la plantilla",
+        "header": "Encabezado",
+        "body": "Cuerpo",
+        "footer": "Pie de página",
+        "buttons": "Botones",
+        "typeOfAction": "Tipo de acción",
+        "buttonText": "Texto del botón",
+        "websiteUrl": "URL del sitio web",
+        "phoneNumber": "Número de teléfono",
+        "offerCode": "Código de oferta",
+        "visitWebsite": "Visitar sitio web",
+        "quickReply": "Respuesta rápida",
+        "callPhoneNumber": "Llamar al número de teléfono",
+        "copyOfferCode": "Copiar código de oferta"
+      },
       "recipientsHeader": "Destinatarios ({filtered} de {total})",
       "recipientsHeaderAll": "Destinatarios ({total})",
       "allStatuses": "Todos los estados",

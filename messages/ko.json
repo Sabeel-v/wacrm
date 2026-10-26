@@ -716,6 +716,23 @@
         "notTrackable": "직접 추적 불가",
         "toastExportFailed": "사용자 다운로드 실패: {error}"
       },
+      "templatePreview": {
+        "title": "템플릿 미리보기",
+        "templateName": "템플릿 이름",
+        "header": "헤더",
+        "body": "본문",
+        "footer": "바닥글",
+        "buttons": "버튼",
+        "typeOfAction": "작업 유형",
+        "buttonText": "버튼 텍스트",
+        "websiteUrl": "웹사이트 URL",
+        "phoneNumber": "전화번호",
+        "offerCode": "할인 코드",
+        "visitWebsite": "웹사이트 방문",
+        "quickReply": "빠른 답장",
+        "callPhoneNumber": "전화 걸기",
+        "copyOfferCode": "할인 코드 복사"
+      },
       "recipientsHeader": "수신자 (전체 {total}명 중 {filtered}명)",
       "recipientsHeaderAll": "수신자 ({total}명)",
       "allStatuses": "모든 상태",

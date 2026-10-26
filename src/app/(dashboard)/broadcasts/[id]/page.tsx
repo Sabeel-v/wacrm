@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Broadcast, BroadcastRecipient, RecipientStatus } from '@/types';
+import { Broadcast, BroadcastRecipient, MessageTemplate, RecipientStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -129,6 +129,8 @@ export default function BroadcastDetailPage() {
   const [downloadingButtonIndex, setDownloadingButtonIndex] = useState<
     number | null
   >(null);
+  const [template, setTemplate] = useState<MessageTemplate | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -152,6 +154,7 @@ export default function BroadcastDetailPage() {
       if (recsError) throw recsError;
       setRecipients(recs ?? []);
 
+      let resolvedTmpl: MessageTemplate | null = null;
       try {
         const btnRes = await fetch(
           `/api/whatsapp/broadcast/${broadcastId}/buttons`
@@ -160,16 +163,48 @@ export default function BroadcastDetailPage() {
           const btnData = await btnRes.json();
           setHasButtons(btnData.hasButtons === true);
           setButtons(btnData.buttons ?? []);
+          if (btnData.template) {
+            resolvedTmpl = btnData.template;
+          }
         }
       } catch (btnErr) {
         console.warn('Failed to fetch button tracking analytics:', btnErr);
       }
+
+      if (!resolvedTmpl && bc?.template_name) {
+        const { data: tmpl } = await supabase
+          .from('message_templates')
+          .select('*')
+          .eq('name', bc.template_name)
+          .maybeSingle();
+        if (tmpl) resolvedTmpl = tmpl;
+      }
+      setTemplate(resolvedTmpl);
+      setTemplateLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('notFound'));
+      setTemplateLoading(false);
     } finally {
       setLoading(false);
     }
   }, [broadcastId, t]);
+
+  const headerContent = useMemo(() => {
+    if (!template?.header_type && !template?.header_content) return null;
+    if (template.header_type === 'text') {
+      return template.header_content || 'TEXT';
+    }
+    if (template.header_media_url) {
+      return template.header_media_url;
+    }
+    if (template.header_content) {
+      return template.header_content;
+    }
+    if (template.header_type) {
+      return `${template.header_type.toUpperCase()} URL`;
+    }
+    return null;
+  }, [template]);
 
   useEffect(() => {
     fetchData();
@@ -608,6 +643,138 @@ export default function BroadcastDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Template Preview */}
+      <div className="rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-medium text-foreground">
+            {t('templatePreview.title')}
+          </h2>
+        </div>
+        <div className="p-5 space-y-4">
+          {templateLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              {/* Template Name */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t('templatePreview.templateName')}
+                </p>
+                <p className="mt-1 text-sm font-semibold uppercase tracking-wide text-foreground">
+                  {template?.name || broadcast.template_name}
+                </p>
+              </div>
+
+              {/* Header */}
+              {headerContent && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t('templatePreview.header')}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {headerContent}
+                  </p>
+                </div>
+              )}
+
+              {/* Body */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t('templatePreview.body')}
+                </p>
+                <div className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                  {template?.body_text || '—'}
+                </div>
+              </div>
+
+              {/* Footer */}
+              {template?.footer_text && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t('templatePreview.footer')}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {template.footer_text}
+                  </p>
+                </div>
+              )}
+
+              {/* Buttons */}
+              {template?.buttons && template.buttons.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t('templatePreview.buttons')}
+                  </p>
+                  <div className="space-y-3">
+                    {template.buttons.map((btn, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-lg border border-border/80 bg-muted/40 p-4 space-y-3"
+                      >
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('templatePreview.typeOfAction')}
+                          </p>
+                          <div className="mt-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-xs">
+                            {btn.type === 'URL'
+                              ? t('templatePreview.visitWebsite')
+                              : btn.type === 'QUICK_REPLY'
+                                ? t('templatePreview.quickReply')
+                                : btn.type === 'PHONE_NUMBER'
+                                  ? t('templatePreview.callPhoneNumber')
+                                  : t('templatePreview.copyOfferCode')}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('templatePreview.buttonText')}
+                          </p>
+                          <div className="mt-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-xs">
+                            {btn.text}
+                          </div>
+                        </div>
+                        {btn.type === 'URL' && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {t('templatePreview.websiteUrl')}
+                            </p>
+                            <div className="mt-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground break-all shadow-xs">
+                              {btn.url}
+                            </div>
+                          </div>
+                        )}
+                        {btn.type === 'PHONE_NUMBER' && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {t('templatePreview.phoneNumber')}
+                            </p>
+                            <div className="mt-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-xs">
+                              {btn.phone_number}
+                            </div>
+                          </div>
+                        )}
+                        {btn.type === 'COPY_CODE' && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {t('templatePreview.offerCode')}
+                            </p>
+                            <div className="mt-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-xs">
+                              {btn.example}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Recipients Table */}
       <div className="rounded-xl border border-border bg-card">

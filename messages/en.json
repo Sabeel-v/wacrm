@@ -716,6 +716,23 @@
         "notTrackable": "Not directly trackable",
         "toastExportFailed": "Failed to download users: {error}"
       },
+      "templatePreview": {
+        "title": "Template Preview",
+        "templateName": "Template Name",
+        "header": "Header",
+        "body": "Body",
+        "footer": "Footer",
+        "buttons": "Buttons",
+        "typeOfAction": "Type of action",
+        "buttonText": "Button Text",
+        "websiteUrl": "Website URL",
+        "phoneNumber": "Phone Number",
+        "offerCode": "Offer Code",
+        "visitWebsite": "Visit Website",
+        "quickReply": "Quick Reply",
+        "callPhoneNumber": "Call Phone Number",
+        "copyOfferCode": "Copy Offer Code"
+      },
       "recipientsHeader": "Recipients ({filtered} of {total})",
       "recipientsHeaderAll": "Recipients ({total})",
       "allStatuses": "All statuses",

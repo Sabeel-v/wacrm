@@ -716,6 +716,23 @@
         "notTrackable": "Não rastreável diretamente",
         "toastExportFailed": "Falha ao baixar usuários: {error}"
       },
+      "templatePreview": {
+        "title": "Prévia do modelo",
+        "templateName": "Nome do modelo",
+        "header": "Cabeçalho",
+        "body": "Corpo",
+        "footer": "Rodapé",
+        "buttons": "Botões",
+        "typeOfAction": "Tipo de ação",
+        "buttonText": "Texto do botão",
+        "websiteUrl": "URL do site",
+        "phoneNumber": "Número de telefone",
+        "offerCode": "Código da oferta",
+        "visitWebsite": "Visitar site",
+        "quickReply": "Resposta rápida",
+        "callPhoneNumber": "Ligar para o número",
+        "copyOfferCode": "Copiar código da oferta"
+      },
       "recipientsHeader": "Destinatários ({filtered} de {total})",
       "recipientsHeaderAll": "Destinatários ({total})",
       "allStatuses": "Todos os status",

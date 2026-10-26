@@ -52,6 +52,7 @@ export async function GET(
       return NextResponse.json({
         hasButtons: false,
         buttons: [],
+        template: templateRow,
       });
     }
 
@@ -146,6 +147,7 @@ export async function GET(
     return NextResponse.json({
       hasButtons: true,
       buttons,
+      template: templateRow,
     });
   } catch (error) {
     return toErrorResponse(error);
