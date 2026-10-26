@@ -164,12 +164,7 @@ function MessageContent({
       return (
         <div>
           <span
-            className={cn(
-              "mb-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
-              isAgent
-                ? "bg-primary-foreground/20 text-primary-foreground"
-                : "bg-primary/20 text-primary",
-            )}
+            className="mb-1 inline-flex items-center gap-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-medium text-primary"
           >
             <LayoutTemplate className="h-3 w-3" />
             {t("template")}
@@ -263,17 +258,15 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
-          isAgent
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-muted text-foreground",
+          "relative rounded-2xl bg-muted px-3 py-2 text-foreground",
+          isAgent ? "rounded-br-md" : "rounded-bl-md",
         )}
       >
         {reply && (
           <ReplyQuote
             authorLabel={reply.authorLabel}
             preview={reply.preview}
-            onPrimary={isAgent}
+            onPrimary={false}
           />
         )}
         <MessageContent
@@ -288,29 +281,17 @@ export function MessageBubble({
             isAgent ? "justify-end" : "justify-start",
           )}
         >
-          {/* AI badge — only on replies the auto-reply bot generated
-              (always outbound, so it sits on the primary fill). Lets
-              agents tell an AI reply from their own / a Flow's at a
-              glance. */}
+          {/* AI badge — only on replies the auto-reply bot generated */}
           {message.ai_generated && (
             <span
-              className="inline-flex items-center gap-0.5 rounded-full bg-primary-foreground/20 px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground"
+              className="inline-flex items-center gap-0.5 rounded-full bg-primary/20 px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-primary"
               title={t("aiBadgeTitle")}
             >
               <Sparkles className="h-2.5 w-2.5" />
               {t("aiBadge")}
             </span>
           )}
-          <span
-            className={cn(
-              "text-[10px]",
-              // Outbound bubbles sit on the primary fill, so the
-              // timestamp must read against that (not the neutral
-              // foreground) — otherwise it goes low-contrast in light
-              // mode. Inbound bubbles use the muted surface.
-              isAgent ? "text-primary-foreground/70" : "text-muted-foreground",
-            )}
-          >
+          <span className="text-[10px] text-muted-foreground">
             {time}
           </span>
           {isAgent && <StatusIcon status={message.status} title={failure} />}
