@@ -104,6 +104,7 @@ const automationSubItems: NavItem[] = [
   { href: "/automations", labelKey: "basicAutomation", icon: Zap },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
   { href: "/agents", labelKey: "aiAgents", icon: Bot },
+  { href: "/quick-replies", labelKey: "quickReplies", icon: Zap },
 ];
 
 interface SidebarProps {
@@ -123,7 +124,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const isChildActive =
     pathname.startsWith("/automations") ||
     pathname.startsWith("/flows") ||
-    pathname.startsWith("/agents");
+    pathname.startsWith("/agents") ||
+    pathname.startsWith("/quick-replies");
 
   const [isAutomationOpen, setIsAutomationOpen] = useState(isChildActive);
 
