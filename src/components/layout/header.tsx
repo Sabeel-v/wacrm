@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { Bell, LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -51,6 +52,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
   const t = useTranslations("Header");
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
+  const unreadNotifications = useUnreadNotifications();
   const titleKey = getPageTitleKey(pathname);
 
   const initial =
@@ -87,6 +89,32 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           )}
         >
           <SettingsIcon className="h-5 w-5" />
+        </Link>
+        <Link
+          href="/notifications"
+          aria-label={
+            unreadNotifications > 0
+              ? t("unreadNotifications", { count: unreadNotifications })
+              : t("notifications")
+          }
+          title={
+            unreadNotifications > 0
+              ? t("unreadNotifications", { count: unreadNotifications })
+              : t("notifications")
+          }
+          className={cn(
+            "relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            pathname.startsWith("/notifications") && "bg-muted text-foreground",
+          )}
+        >
+          <Bell className="h-5 w-5" />
+          {unreadNotifications > 0 && (
+            <span
+              className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground ring-2 ring-background"
+            >
+              {unreadNotifications > 9 ? "9+" : unreadNotifications}
+            </span>
+          )}
         </Link>
 
         <DropdownMenu>

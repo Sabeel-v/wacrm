@@ -48,6 +48,7 @@
     "dashboard": "Panel",
     "inbox": "Bandeja de entrada",
     "notifications": "Notificaciones",
+    "unreadNotifications": "{count} {count, plural, =1 {notificación sin leer} other {notificaciones sin leer}}",
     "contacts": "Contactos",
     "pipelines": "Pipelines",
     "broadcasts": "Difusiones",

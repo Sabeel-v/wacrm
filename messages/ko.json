@@ -48,6 +48,7 @@
     "dashboard": "대시보드",
     "inbox": "인박스",
     "notifications": "알림",
+    "unreadNotifications": "읽지 않은 알림 {count}건",
     "contacts": "연락처",
     "pipelines": "파이프라인",
     "broadcasts": "브로드캐스트",
