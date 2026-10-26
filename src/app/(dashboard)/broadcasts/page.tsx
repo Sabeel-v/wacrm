@@ -34,26 +34,17 @@ function percent(numerator: number, denominator: number): number {
 function RateCell({
   value,
   total,
-  color,
 }: {
   value: number;
   total: number;
-  /** Tailwind bg class for the fill, e.g. "bg-primary" */
-  color: string;
+  /** Kept optional for backward compatibility */
+  color?: string;
 }) {
   const pct = percent(value, total);
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
-        {pct}%
-      </span>
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-1.5 rounded-full ${color}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
+    <span className="text-xs tabular-nums text-muted-foreground">
+      {pct}%
+    </span>
   );
 }
 
