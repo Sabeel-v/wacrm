@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { cn } from "@/lib/utils";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -76,6 +77,17 @@ export function Header({ onOpenSidebar }: HeaderProps) {
 
       <div className="flex items-center gap-1 sm:gap-2">
         <ModeToggle />
+        <Link
+          href="/settings"
+          aria-label={t("settings")}
+          title={t("settings")}
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            pathname.startsWith("/settings") && "bg-muted text-foreground",
+          )}
+        >
+          <SettingsIcon className="h-5 w-5" />
+        </Link>
 
         <DropdownMenu>
         <DropdownMenuTrigger
