@@ -66,54 +66,6 @@ function StatCard({ label, value, total, icon, color }: StatCardProps) {
   );
 }
 
-interface FunnelStep {
-  label: string;
-  value: number;
-  color: string;
-}
-
-/**
- * Pure-CSS funnel chart: decreasing-width rounded bars.
- * Width is relative to the largest step (typically Sent) so we
- * always render a full bar at the top and proportional tails.
- */
-function FunnelChart({ steps }: { steps: FunnelStep[] }) {
-  const max = Math.max(...steps.map((s) => s.value), 1);
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-4 text-sm font-medium text-foreground">Funnel</h3>
-      <div className="space-y-2">
-        {steps.map((step) => {
-          const pctOfMax = Math.max(5, Math.round((step.value / max) * 100));
-          const pctOfSent =
-            steps[0].value > 0
-              ? Math.round((step.value / steps[0].value) * 100)
-              : 0;
-          return (
-            <div key={step.label} className="flex items-center gap-3">
-              <span className="w-20 shrink-0 text-xs text-muted-foreground">
-                {step.label}
-              </span>
-              <div className="relative h-7 flex-1 rounded-full bg-muted">
-                <div
-                  className={`h-7 rounded-full ${step.color} transition-[width] duration-500`}
-                  style={{ width: `${pctOfMax}%` }}
-                />
-                <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-foreground">
-                  {step.value.toLocaleString()}
-                  <span className="ml-2 text-muted-foreground/80">
-                    ({pctOfSent}%)
-                  </span>
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 const RECIPIENT_STATUSES: readonly RecipientStatus[] = [
   'pending',
   'sent',
@@ -392,13 +344,6 @@ export default function BroadcastDetailPage() {
   // than leaving a permanently pulsing "sending" badge.
   const isStalled = broadcast.status === 'sending' && pendingCount > 0;
 
-  const funnelSteps: FunnelStep[] = [
-    { label: t('stats.sent'), value: broadcast.sent_count, color: 'bg-primary' },
-    { label: t('stats.delivered'), value: broadcast.delivered_count, color: 'bg-teal-500' },
-    { label: t('stats.read'), value: broadcast.read_count, color: 'bg-blue-500' },
-    { label: t('stats.replied'), value: broadcast.replied_count, color: 'bg-indigo-500' },
-  ];
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -569,8 +514,6 @@ export default function BroadcastDetailPage() {
           color="bg-red-500/10 text-red-400"
         />
       </div>
-
-      <FunnelChart steps={funnelSteps} />
 
       {/* Button Tracking */}
       {hasButtons && buttons.length > 0 && (
