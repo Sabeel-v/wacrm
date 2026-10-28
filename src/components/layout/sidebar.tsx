@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import {
+  BarChart3,
   Bot,
+  Briefcase,
   ChevronDown,
   Crown,
   GitBranch,
@@ -21,6 +23,7 @@ import {
   Settings,
   Shield,
   User,
+  UserCheck,
   UserCog,
   Users,
   UsersRound,
@@ -97,7 +100,12 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
   { href: "/templates", labelKey: "templates", icon: LayoutTemplate },
   { href: "/contacts", labelKey: "contacts", icon: Users },
-  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
+];
+
+const salesCrmSubItems: NavItem[] = [
+  { href: "/pipelines", labelKey: "pipeline", icon: GitBranch },
+  { href: "/leads", labelKey: "leads", icon: UserCheck },
+  { href: "/reports", labelKey: "reports", icon: BarChart3 },
 ];
 
 const automationSubItems: NavItem[] = [
@@ -121,22 +129,39 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
 
-  const isChildActive =
+  const isSalesCrmActive =
+    pathname.startsWith("/pipelines") ||
+    pathname.startsWith("/pipeline") ||
+    pathname.startsWith("/leads") ||
+    pathname.startsWith("/reports");
+
+  const [isSalesCrmOpen, setIsSalesCrmOpen] = useState(isSalesCrmActive);
+
+  // Automatically expand Sales CRM when any of its child pages is active
+  useEffect(() => {
+    if (isSalesCrmActive) {
+      setIsSalesCrmOpen(true);
+    } else {
+      setIsSalesCrmOpen(false);
+    }
+  }, [isSalesCrmActive, pathname]);
+
+  const isAutomationActive =
     pathname.startsWith("/automations") ||
     pathname.startsWith("/flows") ||
     pathname.startsWith("/agents") ||
     pathname.startsWith("/quick-replies");
 
-  const [isAutomationOpen, setIsAutomationOpen] = useState(isChildActive);
+  const [isAutomationOpen, setIsAutomationOpen] = useState(isAutomationActive);
 
   // Automatically expand Automation when any of its child pages is active
   useEffect(() => {
-    if (isChildActive) {
+    if (isAutomationActive) {
       setIsAutomationOpen(true);
     } else {
       setIsAutomationOpen(false);
     }
-  }, [isChildActive, pathname]);
+  }, [isAutomationActive, pathname]);
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -275,6 +300,63 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               );
             })}
 
+            {/* Expandable Sales CRM Menu */}
+            <li>
+              <button
+                type="button"
+                onClick={() => setIsSalesCrmOpen((prev) => !prev)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                  isSalesCrmActive
+                    ? "text-primary font-semibold hover:bg-muted/50"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                aria-expanded={isSalesCrmOpen}
+              >
+                <Briefcase className="h-4 w-4" />
+                <span className="flex-1 text-left">{t("salesCrm")}</span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 transition-transform duration-200",
+                    isSalesCrmActive ? "text-primary" : "text-muted-foreground",
+                    isSalesCrmOpen && "rotate-180",
+                  )}
+                />
+              </button>
+
+              {isSalesCrmOpen && (
+                <ul className="mt-1 flex flex-col gap-1 pl-3">
+                  {salesCrmSubItems.map((item) => {
+                    const isActive =
+                      item.href === "/pipelines"
+                        ? pathname === "/pipelines" ||
+                          pathname.startsWith("/pipelines/") ||
+                          pathname === "/pipeline" ||
+                          pathname.startsWith("/pipeline/")
+                        : pathname === item.href ||
+                          pathname.startsWith(item.href);
+
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                            isActive
+                              ? "bg-primary/10 text-primary font-semibold"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          )}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span className="flex-1">{t(item.labelKey as string)}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+
             {/* Expandable Automation Menu */}
             <li>
               <button
@@ -282,7 +364,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 onClick={() => setIsAutomationOpen((prev) => !prev)}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                  isChildActive
+                  isAutomationActive
                     ? "text-foreground font-semibold hover:bg-muted/50"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}

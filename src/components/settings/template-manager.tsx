@@ -15,7 +15,6 @@ import {
   Search,
   Flag,
   Tag,
-  Info,
   Copy,
   Check,
 } from 'lucide-react';
@@ -750,40 +749,23 @@ export function TemplateManager() {
         </div>
       </div>
 
-      {/* Meta Review Info Banner & Sync Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-0.5">
-        <div className="flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-950/20 px-3.5 py-2 text-xs text-amber-900 dark:text-amber-200">
-          <Info className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span>
-            WhatsApp can take up to 24 hours to review (approve / reject) a template.{' '}
-            <a
-              href="https://developers.facebook.com/docs/whatsapp/message-templates/guidelines"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-medium hover:text-amber-950 dark:hover:text-amber-100"
-            >
-              See More
-            </a>
+      {/* Sync Status Row */}
+      <div className="flex items-center justify-end gap-3 pt-0.5">
+        {lastSyncedTime && (
+          <span className="text-xs text-muted-foreground">
+            Last synced on: {lastSyncedTime}
           </span>
-        </div>
-
-        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
-          {lastSyncedTime && (
-            <span className="text-xs text-muted-foreground">
-              Last synced on: {lastSyncedTime}
-            </span>
-          )}
-          <Button
-            variant="outline"
-            onClick={handleSyncFromMeta}
-            disabled={syncing}
-            title={t('syncTitle')}
-            className="h-8 border-emerald-600/60 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/60 dark:text-emerald-400 dark:hover:bg-emerald-950/20 text-xs px-3 font-medium gap-1.5"
-          >
-            <RefreshCw className={cn('size-3.5', syncing && 'animate-spin')} />
-            Sync
-          </Button>
-        </div>
+        )}
+        <Button
+          variant="outline"
+          onClick={handleSyncFromMeta}
+          disabled={syncing}
+          title={t('syncTitle')}
+          className="h-8 border-emerald-600/60 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/60 dark:text-emerald-400 dark:hover:bg-emerald-950/20 text-xs px-3 font-medium gap-1.5"
+        >
+          <RefreshCw className={cn('size-3.5', syncing && 'animate-spin')} />
+          Sync
+        </Button>
       </div>
 
       {templates.length === 0 ? (
