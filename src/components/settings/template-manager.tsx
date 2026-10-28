@@ -12,6 +12,12 @@ import {
   Pencil,
   RotateCcw,
   Upload,
+  Search,
+  Flag,
+  Tag,
+  Info,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -47,8 +53,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import type {
   MessageTemplate,
+  MessageTemplateStatus,
   TemplateButton,
   TemplateSampleValues,
 } from '@/types';
@@ -57,6 +73,67 @@ import {
   extractVariableIndices,
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
+
+const STATUS_DOT_COLORS: Record<string, string> = {
+  APPROVED: 'bg-emerald-500',
+  PENDING: 'bg-amber-500',
+  REJECTED: 'bg-rose-500',
+  PAUSED: 'bg-orange-500',
+  DRAFT: 'bg-slate-400',
+  DISABLED: 'bg-rose-700',
+};
+
+const LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
+  en: 'English (en)',
+  en_US: 'English (en)',
+  en_GB: 'English (en)',
+  es: 'Spanish (es)',
+  es_ES: 'Spanish (es)',
+  es_MX: 'Spanish (es)',
+  pt: 'Portuguese (pt)',
+  pt_BR: 'Portuguese (pt)',
+  pt_PT: 'Portuguese (pt)',
+  fr: 'French (fr)',
+  fr_FR: 'French (fr)',
+  de: 'German (de)',
+  it: 'Italian (it)',
+  nl: 'Dutch (nl)',
+  pl: 'Polish (pl)',
+  ru: 'Russian (ru)',
+  tr: 'Turkish (tr)',
+  hi: 'Hindi (hi)',
+  ar: 'Arabic (ar)',
+  ko: 'Korean (ko)',
+  ja: 'Japanese (ja)',
+  zh: 'Chinese (zh)',
+  id: 'Indonesian (id)',
+};
+
+function formatLanguageName(lang?: string | null): string {
+  if (!lang) return 'English (en)';
+  if (LANGUAGE_DISPLAY_NAMES[lang]) return LANGUAGE_DISPLAY_NAMES[lang];
+  const base = lang.split('_')[0].toLowerCase();
+  if (LANGUAGE_DISPLAY_NAMES[base]) return LANGUAGE_DISPLAY_NAMES[base];
+  return `${lang} (${lang})`;
+}
+
+function getTemplateTitle(name: string): string {
+  if (name.includes('_') && !name.startsWith('browse_')) {
+    return name.replace(/_/g, ' ').toUpperCase();
+  }
+  return name;
+}
+
+function formatLastSyncedDate(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  const hour12 = hours % 12 || 12;
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear().toString().slice(-2);
+  return `${hour12}:${minutes} ${ampm}, ${day}/${month}/${year}`;
+}
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
@@ -136,6 +213,13 @@ export function TemplateManager() {
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [profiles, setProfiles] = useState<{ user_id: string; full_name?: string | null; email?: string | null }[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [copiedName, setCopiedName] = useState<string | null>(null);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -190,25 +274,86 @@ export function TemplateManager() {
       return;
     }
     fetchTemplates(user.id);
+
+    // Initial last-synced time
+    try {
+      const stored = localStorage.getItem('templates_last_synced');
+      if (stored) {
+        setLastSyncedTime(formatLastSyncedDate(new Date(stored)));
+      } else {
+        const now = new Date();
+        setLastSyncedTime(formatLastSyncedDate(now));
+        localStorage.setItem('templates_last_synced', now.toISOString());
+      }
+    } catch {
+      setLastSyncedTime(formatLastSyncedDate(new Date()));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
 
   async function fetchTemplates(userId: string) {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('message_templates')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setTemplates(data || []);
+      const [templatesRes, profilesRes] = await Promise.all([
+        supabase
+          .from('message_templates')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('user_id, full_name, email'),
+      ]);
+
+      if (templatesRes.error) throw templatesRes.error;
+      setTemplates(templatesRes.data || []);
+      if (profilesRes.data) {
+        setProfiles(profilesRes.data);
+      }
     } catch (err) {
       console.error('Failed to fetch templates:', err);
       toast.error(t('toastLoadFailed'));
     } finally {
       setLoading(false);
     }
+  }
+
+  const profilesMap = useMemo(() => {
+    const map = new Map<string, string>();
+    profiles.forEach((p) => {
+      const name = p.full_name?.trim() || p.email?.split('@')[0] || p.email || 'User';
+      map.set(p.user_id, name);
+    });
+    return map;
+  }, [profiles]);
+
+  const filteredTemplates = useMemo(() => {
+    return templates.filter((tpl) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        if (!tpl.name.toLowerCase().includes(q)) return false;
+      }
+      if (statusFilter !== 'ALL') {
+        const statusKey = (tpl.status || 'DRAFT').toUpperCase();
+        if (statusKey !== statusFilter.toUpperCase()) return false;
+      }
+      if (categoryFilter !== 'ALL') {
+        if (tpl.category.toUpperCase() !== categoryFilter.toUpperCase()) return false;
+      }
+      return true;
+    });
+  }, [templates, searchQuery, statusFilter, categoryFilter]);
+
+  const hasActiveFilters =
+    searchQuery.trim() !== '' || statusFilter !== 'ALL' || categoryFilter !== 'ALL';
+
+  function handleCopy(name: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(name);
+    setCopiedName(name);
+    toast.success(`Copied "${name}" to clipboard`);
+    setTimeout(() => {
+      setCopiedName((curr) => (curr === name ? null : curr));
+    }, 2000);
   }
 
   function buildSubmitPayload() {
@@ -339,6 +484,13 @@ export function TemplateManager() {
           t('toastSyncTruncated'),
           { duration: 10000 },
         );
+      }
+      const syncNow = new Date();
+      setLastSyncedTime(formatLastSyncedDate(syncNow));
+      try {
+        localStorage.setItem('templates_last_synced', syncNow.toISOString());
+      } catch {
+        // ignore
       }
       await fetchTemplates(user.id);
     } catch (err) {
@@ -519,27 +671,120 @@ export function TemplateManager() {
 
   return (
     <section className="animate-in fade-in-50 space-y-4 duration-200">
-      <SettingsPanelHead
-        title={t('title')}
-        description={t('description')}
-        action={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleSyncFromMeta}
-              disabled={syncing}
-              title={t('syncTitle')}
+      {/* Top Filter and Action Bar */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* Search by template name */}
+        <div className="relative min-w-[220px] flex-1 sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search a template by name"
+            className="h-9 pl-9 pr-8 text-xs bg-card border-border"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              <RefreshCw className={`size-4 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? t('syncing') : t('syncFromMeta')}
-            </Button>
-            <Button onClick={openCreate}>
-              <Plus className="size-4" />
-              {t('newTemplate')}
-            </Button>
-          </div>
-        }
-      />
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Status Dropdown */}
+        <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
+          <SelectTrigger className="h-9 min-w-[120px] text-xs bg-card border-border">
+            <Flag className="size-3.5 mr-1.5 text-muted-foreground" />
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Statuses</SelectItem>
+            <SelectItem value="APPROVED">Approved</SelectItem>
+            <SelectItem value="PENDING">Pending</SelectItem>
+            <SelectItem value="REJECTED">Rejected</SelectItem>
+            <SelectItem value="DRAFT">Draft</SelectItem>
+            <SelectItem value="PAUSED">Paused</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Category Dropdown */}
+        <Select value={categoryFilter} onValueChange={(v) => v && setCategoryFilter(v)}>
+          <SelectTrigger className="h-9 min-w-[130px] text-xs bg-card border-border">
+            <Tag className="size-3.5 mr-1.5 text-muted-foreground" />
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All Categories</SelectItem>
+            <SelectItem value="Marketing">Marketing</SelectItem>
+            <SelectItem value="Utility">Utility</SelectItem>
+            <SelectItem value="Authentication">Authentication</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Reset filter button */}
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearchQuery('');
+              setStatusFilter('ALL');
+              setCategoryFilter('ALL');
+            }}
+            className="h-9 text-xs text-muted-foreground hover:text-foreground px-2"
+          >
+            Reset
+          </Button>
+        )}
+
+        {/* New Template CTA */}
+        <div className="ml-auto">
+          <Button
+            onClick={openCreate}
+            className="h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="size-4 mr-1.5" />
+            {t('newTemplate')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Meta Review Info Banner & Sync Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-0.5">
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300/80 bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-950/20 px-3.5 py-2 text-xs text-amber-900 dark:text-amber-200">
+          <Info className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            WhatsApp can take up to 24 hours to review (approve / reject) a template.{' '}
+            <a
+              href="https://developers.facebook.com/docs/whatsapp/message-templates/guidelines"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-medium hover:text-amber-950 dark:hover:text-amber-100"
+            >
+              See More
+            </a>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+          {lastSyncedTime && (
+            <span className="text-xs text-muted-foreground">
+              Last synced on: {lastSyncedTime}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            onClick={handleSyncFromMeta}
+            disabled={syncing}
+            title={t('syncTitle')}
+            className="h-8 border-emerald-600/60 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/60 dark:text-emerald-400 dark:hover:bg-emerald-950/20 text-xs px-3 font-medium gap-1.5"
+          >
+            <RefreshCw className={cn('size-3.5', syncing && 'animate-spin')} />
+            Sync
+          </Button>
+        </div>
+      </div>
 
       {templates.length === 0 ? (
         <Card>
@@ -550,117 +795,167 @@ export function TemplateManager() {
             </p>
           </CardContent>
         </Card>
+      ) : filteredTemplates.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-muted-foreground text-sm">No templates match the selected filters.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('ALL');
+                setCategoryFilter('ALL');
+              }}
+              className="mt-3 text-xs"
+            >
+              Reset filters
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid gap-3 xl:grid-cols-2">
-          {templates.map((template) => {
-            const statusKey = template.status || 'DRAFT';
-            const status = templateStatusConfig[statusKey];
-            return (
-              <Card key={template.id}>
-                <CardContent className="flex items-start justify-between pt-4">
-                  <div className="space-y-2 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-medium text-foreground">{template.name}</h3>
-                      <Badge
-                        className={`text-xs border ${categoryColors[template.category] || ''}`}
-                      >
-                        {template.category}
-                      </Badge>
-                      <Badge className={`text-xs border ${status.classes}`}>
-                        {status.label}
-                      </Badge>
-                      {template.language && (
-                        <span className="text-xs text-muted-foreground uppercase">
-                          {template.language}
-                        </span>
-                      )}
-                      {template.quality_score && (
-                        <span
-                          className={`text-[10px] uppercase font-medium ${
-                            template.quality_score === 'GREEN'
-                              ? 'text-emerald-400'
-                              : template.quality_score === 'YELLOW'
-                                ? 'text-yellow-400'
-                                : 'text-red-400'
-                          }`}
-                          title={t('qualityScoreTitle')}
-                        >
-                          {template.quality_score}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {template.body_text}
-                    </p>
-                    {template.footer_text && (
-                      <p className="text-xs text-muted-foreground italic">
-                        {template.footer_text}
-                      </p>
-                    )}
-                    {(template.rejection_reason || template.submission_error) && (
-                      <div className="flex items-start gap-1.5 text-xs text-red-400 bg-red-950/20 border border-red-900/40 rounded px-2 py-1.5">
-                        <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
-                        <span>
-                          {template.rejection_reason || template.submission_error}
-                        </span>
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="font-semibold text-foreground py-3.5 px-4 text-xs sm:text-sm">
+                  Template Name
+                </TableHead>
+                <TableHead className="font-semibold text-foreground py-3.5 px-4 text-xs sm:text-sm">
+                  Status
+                </TableHead>
+                <TableHead className="font-semibold text-foreground py-3.5 px-4 text-xs sm:text-sm">
+                  Category
+                </TableHead>
+                <TableHead className="font-semibold text-foreground py-3.5 px-4 text-xs sm:text-sm">
+                  Language(s)
+                </TableHead>
+                <TableHead className="font-semibold text-foreground py-3.5 px-4 text-xs sm:text-sm">
+                  Created By
+                </TableHead>
+                <TableHead className="w-24 text-right py-3.5 px-4 font-semibold text-foreground text-xs sm:text-sm">
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTemplates.map((template) => {
+                const statusKey = (template.status || 'DRAFT') as MessageTemplateStatus;
+                const statusInfo =
+                  templateStatusConfig[statusKey] || { label: statusKey, classes: '' };
+                const dotColor = STATUS_DOT_COLORS[statusKey] || 'bg-slate-400';
+                const displayName = getTemplateTitle(template.name);
+                const creatorName =
+                  profilesMap.get(template.user_id) ||
+                  user?.user_metadata?.full_name ||
+                  'Admin';
+
+                return (
+                  <TableRow
+                    key={template.id}
+                    className="border-border hover:bg-muted/40 transition-colors"
+                  >
+                    {/* Template Name */}
+                    <TableCell className="py-3.5 px-4">
+                      <div className="space-y-0.5">
+                        <div className="font-medium text-foreground text-sm">
+                          {displayName}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span>{template.name}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopy(template.name, e)}
+                            className="text-muted-foreground/70 hover:text-foreground transition-colors p-0.5"
+                            title="Copy template name"
+                          >
+                            {copiedName === template.name ? (
+                              <Check className="size-3.5 text-emerald-500" />
+                            ) : (
+                              <Copy className="size-3.5" />
+                            )}
+                          </button>
+                        </div>
+                        {(template.rejection_reason || template.submission_error) && (
+                          <div className="flex items-center gap-1 text-[11px] text-red-500 pt-0.5">
+                            <AlertCircle className="size-3 shrink-0" />
+                            <span className="truncate max-w-[280px]">
+                              {template.rejection_reason || template.submission_error}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
-                    {statusKey === 'APPROVED' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(template)}
-                        title={t('editTitle')}
-                        aria-label={t('editLabel')}
-                        className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 px-2"
-                      >
-                        <Pencil className="size-3.5" />
-                        {t('edit')}
-                      </Button>
-                    )}
-                    {(statusKey === 'REJECTED' || statusKey === 'PAUSED') && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(template)}
-                        title={t('resubmitTitle')}
-                        aria-label={t('resubmitLabel')}
-                        className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 px-2"
-                      >
-                        <RotateCcw className="size-3.5" />
-                        {t('resubmit')}
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setTemplateToDelete(template)}
-                      disabled={deletingId === template.id}
-                      aria-label={
-                        template.meta_template_id
-                          ? t('deleteMetaLocallyAria')
-                          : t('deleteLocallyAria')
-                      }
-                      title={
-                        template.meta_template_id
-                          ? t('deleteMetaLocallyTitle')
-                          : t('deleteLocallyTitle')
-                      }
-                      className="text-muted-foreground hover:text-red-400 hover:bg-red-950/30 h-8 w-8"
-                    >
-                      {deletingId === template.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-4" />
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                    </TableCell>
+
+                    {/* Status with dot */}
+                    <TableCell className="py-3.5 px-4">
+                      <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+                        <span className={cn('size-2 rounded-full', dotColor)} />
+                        {statusInfo.label}
+                      </span>
+                    </TableCell>
+
+                    {/* Category */}
+                    <TableCell className="py-3.5 px-4 text-sm text-foreground">
+                      {template.category}
+                    </TableCell>
+
+                    {/* Language(s) */}
+                    <TableCell className="py-3.5 px-4 text-sm text-foreground">
+                      {formatLanguageName(template.language)}
+                    </TableCell>
+
+                    {/* Created By */}
+                    <TableCell className="py-3.5 px-4 text-sm text-foreground">
+                      {creatorName}
+                    </TableCell>
+
+                    {/* Actions */}
+                    <TableCell className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {statusKey === 'APPROVED' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEdit(template)}
+                            title={t('editTitle')}
+                            aria-label={t('editLabel')}
+                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-7 px-2 text-xs"
+                          >
+                            <Pencil className="size-3 mr-1" />
+                            {t('edit')}
+                          </Button>
+                        )}
+                        {(statusKey === 'REJECTED' || statusKey === 'PAUSED') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEdit(template)}
+                            title={t('resubmitTitle')}
+                            aria-label={t('resubmitLabel')}
+                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-7 px-2 text-xs"
+                          >
+                            <RotateCcw className="size-3 mr-1" />
+                            {t('resubmit')}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setTemplateToDelete(template)}
+                          disabled={deletingId === template.id}
+                          aria-label={t('deleteAria', { name: template.name })}
+                          className="text-muted-foreground hover:text-red-400 hover:bg-red-950/20 size-7"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
