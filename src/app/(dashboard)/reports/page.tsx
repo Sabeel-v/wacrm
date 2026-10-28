@@ -1,48 +1,185 @@
 "use client";
 
 import { useState } from "react";
-import {
-  BarChart3,
-  TrendingUp,
-  DollarSign,
-  Award,
-  Briefcase,
-  Calendar,
-  Download,
-  ArrowUpRight,
-  ChevronDown,
-  Percent,
-  CheckCircle2,
-} from "lucide-react";
+import { Calendar, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+
+interface PieSlice {
+  label: string;
+  value: number;
+  color: string;
+}
+
+function getDonutArc(
+  cx: number,
+  cy: number,
+  rOuter: number,
+  rInner: number,
+  startAngle: number,
+  endAngle: number
+): string {
+  const x1 = cx + rOuter * Math.cos(startAngle);
+  const y1 = cy + rOuter * Math.sin(startAngle);
+  const x2 = cx + rOuter * Math.cos(endAngle);
+  const y2 = cy + rOuter * Math.sin(endAngle);
+
+  const x3 = cx + rInner * Math.cos(endAngle);
+  const y3 = cy + rInner * Math.sin(endAngle);
+  const x4 = cx + rInner * Math.cos(startAngle);
+  const y4 = cy + rInner * Math.sin(startAngle);
+
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+
+  return `M ${x1} ${y1} A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${rInner} ${rInner} 0 ${largeArc} 0 ${x4} ${y4} Z`;
+}
+
+function getPieArc(
+  cx: number,
+  cy: number,
+  r: number,
+  startAngle: number,
+  endAngle: number
+): string {
+  const x1 = cx + r * Math.cos(startAngle);
+  const y1 = cy + r * Math.sin(startAngle);
+  const x2 = cx + r * Math.cos(endAngle);
+  const y2 = cy + r * Math.sin(endAngle);
+
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+}
+
+function CircleChart({
+  slices,
+  isDonut = false,
+  size = 170,
+}: {
+  slices: PieSlice[];
+  isDonut?: boolean;
+  size?: number;
+}) {
+  const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  const cx = size / 2;
+  const cy = size / 2;
+  const rOuter = size * 0.44;
+  const rInner = isDonut ? size * 0.28 : 0;
+
+  let currentAngle = -Math.PI / 2;
+
+  const paths = slices.map((slice) => {
+    const fraction = total > 0 ? slice.value / total : 0;
+    const sweepAngle = fraction * 2 * Math.PI;
+    const startAngle = currentAngle;
+    const endAngle = currentAngle + sweepAngle;
+    currentAngle = endAngle;
+
+    const isFull = sweepAngle >= 2 * Math.PI - 0.001;
+
+    let path = "";
+    if (isDonut) {
+      if (isFull) {
+        const mid = startAngle + Math.PI;
+        path = `${getDonutArc(cx, cy, rOuter, rInner, startAngle, mid)} ${getDonutArc(cx, cy, rOuter, rInner, mid, endAngle)}`;
+      } else {
+        path = getDonutArc(cx, cy, rOuter, rInner, startAngle, endAngle);
+      }
+    } else {
+      if (isFull) {
+        const mid = startAngle + Math.PI;
+        path = `${getPieArc(cx, cy, rOuter, startAngle, mid)} ${getPieArc(cx, cy, rOuter, mid, endAngle)}`;
+      } else {
+        path = getPieArc(cx, cy, rOuter, startAngle, endAngle);
+      }
+    }
+
+    return {
+      slice,
+      path,
+      fraction,
+    };
+  });
+
+  return (
+    <div className="relative inline-flex flex-col items-center">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="overflow-visible transition-transform duration-200 hover:scale-105"
+      >
+        {paths.map(({ slice, path, fraction }, i) => (
+          <path
+            key={i}
+            d={path}
+            fill={slice.color}
+            stroke="var(--card)"
+            strokeWidth={1}
+            className="cursor-pointer transition-opacity duration-150 hover:opacity-85"
+            onMouseEnter={() =>
+              setHoveredSlice(`${slice.label} (${(fraction * 100).toFixed(1)}%)`)
+            }
+            onMouseLeave={() => setHoveredSlice(null)}
+          >
+            <title>{`${slice.label}: ${(fraction * 100).toFixed(1)}%`}</title>
+          </path>
+        ))}
+      </svg>
+      {hoveredSlice && (
+        <div className="pointer-events-none absolute -top-8 z-20 whitespace-nowrap rounded bg-foreground/90 px-2 py-0.5 text-[11px] font-medium text-background shadow-xs">
+          {hoveredSlice}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ReportsPage() {
   const [timeRange, setTimeRange] = useState("Last 30 Days");
 
-  const STAGE_BREAKDOWN = [
-    { name: "New Lead", count: 24, value: "$36,000", percentage: 65, color: "bg-blue-500" },
-    { name: "Qualified", count: 18, value: "$45,200", percentage: 50, color: "bg-yellow-500" },
-    { name: "Proposal Sent", count: 12, value: "$38,400", percentage: 35, color: "bg-orange-500" },
-    { name: "Negotiation", count: 8, value: "$28,900", percentage: 22, color: "bg-purple-500" },
-    { name: "Won", count: 14, value: "$36,000", percentage: 40, color: "bg-emerald-500" },
+  // Chart 1: New Leads (Donut)
+  const newLeadsSlices: PieSlice[] = [
+    { label: "Direct Web", value: 95.5, color: "#facc15" }, // Yellow/Gold
+    { label: "WhatsApp Inbound", value: 1.5, color: "#e53935" }, // Red
+    { label: "Chatbot", value: 1.5, color: "#00bcd4" }, // Cyan
+    { label: "Other", value: 1.5, color: "#1e88e5" }, // Blue
   ];
 
-  const SOURCES = [
-    { name: "WhatsApp Direct", deals: 42, revenue: "$89,400", winRate: "72%" },
-    { name: "Website Chat Widget", deals: 26, revenue: "$52,100", winRate: "64%" },
-    { name: "Broadcast Campaigns", deals: 18, revenue: "$31,500", winRate: "58%" },
-    { name: "Client Referrals", deals: 9, revenue: "$21,500", winRate: "89%" },
+  // Chart 2: IN-PROGRESS (Donut)
+  const inProgressSlices: PieSlice[] = [
+    { label: "Follow-up Needed", value: 36, color: "#1a237e" }, // Dark Navy
+    { label: "Quotation Sent", value: 18, color: "#512da8" }, // Indigo / Purple
+    { label: "Demo Scheduled", value: 15, color: "#c0ca33" }, // Olive / Lime
+    { label: "Reviewing Proposal", value: 8, color: "#00acc1" }, // Cyan / Teal
+    { label: "Hot Opportunity", value: 19, color: "#e53935" }, // Crimson / Red
+    { label: "On Hold", value: 4, color: "#8d6e63" }, // Brown
+  ];
+
+  // Chart 3: Lost (Solid Pie)
+  const lostSlices: PieSlice[] = [
+    { label: "Budget Constraint", value: 45, color: "#facc15" }, // Yellow/Amber
+    { label: "Competitor Chosen", value: 35, color: "#1b5e20" }, // Dark Green
+    { label: "Not Interested", value: 8, color: "#d32f2f" }, // Red
+    { label: "Unresponsive", value: 5, color: "#00bcd4" }, // Cyan
+    { label: "Feature Gap", value: 4, color: "#8d6e63" }, // Brown
+    { label: "Other", value: 3, color: "#a1887f" }, // Tan
+  ];
+
+  // Chart 4: Converted (Solid Pie)
+  const convertedSlices: PieSlice[] = [
+    { label: "Standard Plan", value: 73.5, color: "#ef5350" }, // Coral / Red
+    { label: "Enterprise Custom", value: 26.5, color: "#26c6da" }, // Cyan / Turquoise
   ];
 
   return (
     <div className="flex-1 space-y-6 p-6">
-      {/* Header */}
+      {/* Top action row */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Reports</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Sales Reports</h1>
           <p className="text-sm text-muted-foreground">
-            Sales performance analytics, pipeline velocity, and conversion insights.
+            Lead conversion funnel and tag distribution analysis.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -52,120 +189,218 @@ export default function ReportsPage() {
           </div>
           <Button variant="outline" size="sm" className="gap-2">
             <Download className="h-4 w-4" />
-            Export Report
+            Export
           </Button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Total Pipeline Value</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <DollarSign className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">$184,500</p>
-          <p className="mt-1 flex items-center text-xs text-emerald-500 font-medium">
-            <ArrowUpRight className="mr-1 h-3.5 w-3.5" /> +18.4% vs last period
-          </p>
+      {/* SECTION 1: LEAD FUNNEL BY STAGES */}
+      <section className="rounded-xl border border-border/80 bg-card shadow-xs">
+        <div className="border-b border-border/80 px-6 py-4">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
+            LEAD FUNNEL BY STAGES
+          </h2>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Deals Won</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
-              <Award className="h-4 w-4" />
+        <div className="flex flex-col items-center justify-between gap-8 p-6 lg:flex-row">
+          {/* Left Column: 3 Stacked Metric Cards */}
+          <div className="flex w-full flex-col gap-3.5 sm:w-64">
+            <div className="rounded-sm border border-border/80 bg-background/50 p-4 text-center shadow-xs">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                TOTAL LEADS
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                180323
+              </p>
+            </div>
+
+            <div className="rounded-sm border border-border/80 bg-background/50 p-4 text-center shadow-xs">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                TOTAL IN-PROGRESS
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                23203
+              </p>
+            </div>
+
+            <div className="rounded-sm border border-border/80 bg-background/50 p-4 text-center shadow-xs">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                TOTAL CLOSED
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                39702
+              </p>
             </div>
           </div>
-          <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">34</p>
-          <p className="mt-1 text-xs text-muted-foreground">Total $72,400 closed</p>
+
+          {/* Right Column: Visual Lead Funnel */}
+          <div className="flex flex-1 items-center justify-center overflow-x-auto py-2">
+            <svg
+              viewBox="0 0 540 210"
+              className="h-auto w-full max-w-[540px] overflow-visible"
+            >
+              {/* SLICE 1: New Leads (Top wide inverted trapezoid) */}
+              <polygon
+                points="80,15 320,15 235,100 165,100"
+                fill="#29b6f6"
+                className="cursor-pointer transition-opacity duration-150 hover:opacity-90"
+              >
+                <title>New Leads: 65.12%</title>
+              </polygon>
+              {/* Pointer line + label for New Leads */}
+              <line
+                x1="285"
+                y1="52"
+                x2="330"
+                y2="52"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                className="text-muted-foreground/60"
+              />
+              <text
+                x="338"
+                y="56"
+                className="fill-foreground text-[12px] font-bold"
+              >
+                New Leads(65.12 %)
+              </text>
+
+              {/* SLICE 2: Connected But Busy */}
+              <polygon
+                points="165,100 235,100 235,106 165,106"
+                fill="#7c4dff"
+                className="cursor-pointer transition-opacity duration-150 hover:opacity-90"
+              >
+                <title>Connected But Busy: 2.69%</title>
+              </polygon>
+              {/* Pointer line + label */}
+              <polyline
+                points="235,103 260,94 290,94"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                className="text-muted-foreground/60"
+              />
+              <text
+                x="298"
+                y="98"
+                className="fill-foreground text-[12px] font-bold"
+              >
+                Connected But Busy(2.69 %)
+              </text>
+
+              {/* SLICE 3: Follow-up */}
+              <polygon
+                points="165,106 235,106 235,130 165,130"
+                fill="#00e676"
+                className="cursor-pointer transition-opacity duration-150 hover:opacity-90"
+              >
+                <title>Follow-up: 9.83%</title>
+              </polygon>
+              {/* Pointer line + label */}
+              <line
+                x1="235"
+                y1="118"
+                x2="290"
+                y2="118"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                className="text-muted-foreground/60"
+              />
+              <text
+                x="298"
+                y="122"
+                className="fill-foreground text-[12px] font-bold"
+              >
+                Follow-up(9.83 %)
+              </text>
+
+              {/* SLICE 4: May buy later */}
+              <polygon
+                points="165,130 235,130 235,137 165,137"
+                fill="#ff9100"
+                className="cursor-pointer transition-opacity duration-150 hover:opacity-90"
+              >
+                <title>May buy later: 0.21%</title>
+              </polygon>
+              {/* Pointer line + label */}
+              <polyline
+                points="235,134 260,142 290,142"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                className="text-muted-foreground/60"
+              />
+              <text
+                x="298"
+                y="146"
+                className="fill-foreground text-[12px] font-bold"
+              >
+                May buy later(0.21 %)
+              </text>
+
+              {/* SLICE 5: Interested */}
+              <polygon
+                points="165,137 235,137 235,145 165,145"
+                fill="#d500f9"
+                className="cursor-pointer transition-opacity duration-150 hover:opacity-90"
+              >
+                <title>Interested: 0.14%</title>
+              </polygon>
+              {/* Pointer line + label */}
+              <polyline
+                points="235,141 260,166 290,166"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                className="text-muted-foreground/60"
+              />
+              <text
+                x="298"
+                y="170"
+                className="fill-foreground text-[12px] font-bold"
+              >
+                Interested(0.14 %)
+              </text>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 2: LEADS BY TAGS */}
+      <section className="rounded-xl border border-border/80 bg-card shadow-xs">
+        <div className="border-b border-border/80 px-6 py-4">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
+            LEADS BY TAGS
+          </h2>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Win Rate</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
-              <Percent className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">68.4%</p>
-          <p className="mt-1 flex items-center text-xs text-emerald-500 font-medium">
-            <ArrowUpRight className="mr-1 h-3.5 w-3.5" /> +4.1% improvement
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Avg Deal Size</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10 text-purple-500">
-              <Briefcase className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">$5,426</p>
-          <p className="mt-1 text-xs text-muted-foreground">Across all stages</p>
-        </div>
-      </div>
-
-      {/* Analytics Breakdown Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Pipeline Stage Distribution */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="flex items-center justify-between pb-4 border-b border-border">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Pipeline Stage Distribution</h2>
-              <p className="text-xs text-muted-foreground">Active deals and volume by stage</p>
-            </div>
-            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+        <div className="grid grid-cols-1 gap-8 p-6 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Chart 1: New Leads (Donut) */}
+          <div className="flex flex-col items-center">
+            <CircleChart slices={newLeadsSlices} isDonut={true} size={170} />
+            <p className="mt-4 text-sm font-bold text-foreground">New Leads</p>
           </div>
 
-          <div className="mt-6 space-y-4">
-            {STAGE_BREAKDOWN.map((stage) => (
-              <div key={stage.name} className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-medium">
-                  <span className="text-foreground">{stage.name} ({stage.count} deals)</span>
-                  <span className="text-muted-foreground">{stage.value}</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${stage.color}`}
-                    style={{ width: `${stage.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+          {/* Chart 2: IN-PROGRESS (Donut) */}
+          <div className="flex flex-col items-center">
+            <CircleChart slices={inProgressSlices} isDonut={true} size={170} />
+            <p className="mt-4 text-sm font-bold text-foreground">IN-PROGRESS</p>
+          </div>
+
+          {/* Chart 3: Lost (Solid Pie) */}
+          <div className="flex flex-col items-center">
+            <CircleChart slices={lostSlices} isDonut={false} size={170} />
+            <p className="mt-4 text-sm font-bold text-foreground">Lost</p>
+          </div>
+
+          {/* Chart 4: Converted (Solid Pie) */}
+          <div className="flex flex-col items-center">
+            <CircleChart slices={convertedSlices} isDonut={false} size={170} />
+            <p className="mt-4 text-sm font-bold text-foreground">Converted</p>
           </div>
         </div>
-
-        {/* Lead Source Performance */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="flex items-center justify-between pb-4 border-b border-border">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Channel Conversion Performance</h2>
-              <p className="text-xs text-muted-foreground">Conversion metrics segmented by channel</p>
-            </div>
-            <TrendingUp className="h-5 w-5 text-muted-foreground" />
-          </div>
-
-          <div className="mt-4 divide-y divide-border">
-            {SOURCES.map((source) => (
-              <div key={source.name} className="flex items-center justify-between py-3.5">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{source.name}</p>
-                  <p className="text-xs text-muted-foreground">{source.deals} deals initiated</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-foreground">{source.revenue}</p>
-                  <Badge variant="outline" className="mt-0.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[10px]">
-                    {source.winRate} win rate
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
   );
 }
