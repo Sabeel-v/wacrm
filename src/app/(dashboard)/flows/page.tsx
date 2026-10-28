@@ -201,7 +201,7 @@ export default function FlowsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold text-foreground">{t("title")}</h1>
@@ -209,9 +209,6 @@ export default function FlowsPage() {
               {t("beta")}
             </span>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t("description")}
-          </p>
         </div>
         <GatedButton
           canAct={canCreate}
