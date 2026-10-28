@@ -53,7 +53,6 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
       <header className="flex items-center justify-between border-b border-border px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">{t('description')}</p>
         </div>
         <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1">
           {[7, 30, 90].map((r) => (

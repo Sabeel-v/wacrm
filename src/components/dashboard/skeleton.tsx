@@ -19,7 +19,6 @@ export function SkeletonCard({ className }: { className?: string }) {
     >
       <Skeleton className="h-4 w-32" />
       <Skeleton className="mt-4 h-8 w-20" />
-      <Skeleton className="mt-2 h-3 w-16" />
     </div>
   )
 }

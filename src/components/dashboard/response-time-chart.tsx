@@ -53,9 +53,6 @@ export function ResponseTimeChart({
           <h2 className="text-sm font-semibold text-foreground">
             {t('title')}
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t('description')}
-          </p>
         </div>
         <div className="flex items-center gap-3 text-right text-xs">
           {thresholdMinutes > 0 && (

@@ -6,7 +6,7 @@ interface MetricCardProps {
   title: string
   /** Pre-formatted value for display (e.g. "42" or "$1,250"). */
   value: string
-  icon: ComponentType<{ className?: string }>
+  icon?: ComponentType<{ className?: string }>
   /**
    * Delta-mode secondary row: arrow + delta text. Omit when the metric
    * doesn't have a sensible comparison (e.g. total pipeline value).
@@ -26,9 +26,11 @@ export function MetricCard({ title, value, icon: Icon, delta, subtitle }: Metric
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-start justify-between">
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          <Icon className="h-4 w-4" />
-        </div>
+        {Icon ? (
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <Icon className="h-4 w-4" />
+          </div>
+        ) : null}
       </div>
       <p className="mt-3 text-[28px] leading-none font-bold tabular-nums text-foreground">
         {value}

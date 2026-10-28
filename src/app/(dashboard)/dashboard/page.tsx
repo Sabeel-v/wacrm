@@ -4,12 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
-import {
-  MessageSquare,
-  UserPlus,
-  DollarSign,
-  Send,
-} from 'lucide-react'
 
 import {
   loadActivity,
@@ -126,9 +120,6 @@ export default function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('description')}
-        </p>
       </div>
 
       {/* Metric cards */}
@@ -140,49 +131,18 @@ export default function DashboardPage() {
             <MetricCard
               title={t('activeConversations')}
               value={metrics.activeConversations.current.toLocaleString()}
-              icon={MessageSquare}
-              delta={{
-                sign: metrics.activeConversations.previous,
-                label: deltaLabel(
-                  metrics.activeConversations.previous, 
-                  t('newTodayVsYesterday'), 
-                  t('noChange', { suffix: t('newTodayVsYesterday') })
-                ),
-              }}
             />
             <MetricCard
               title={t('newContactsToday')}
               value={metrics.newContactsToday.current.toLocaleString()}
-              icon={UserPlus}
-              delta={{
-                sign:
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                label: deltaLabel(
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                  t('vsYesterday'),
-                  t('noChange', { suffix: t('vsYesterday') })
-                ),
-              }}
             />
             <MetricCard
               title={t('openDealsValue')}
               value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
-              icon={DollarSign}
-              subtitle={t('openDeals', { count: metrics.openDealsCount })}
             />
             <MetricCard
               title={t('messagesSentToday')}
               value={metrics.messagesSentToday.current.toLocaleString()}
-              icon={Send}
-              delta={{
-                sign:
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                label: deltaLabel(
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                  t('vsYesterday'),
-                  t('noChange', { suffix: t('vsYesterday') })
-                ),
-              }}
             />
           </>
         )}
@@ -223,12 +183,4 @@ export default function DashboardPage() {
       <ActivityFeed items={activity} loading={activityLoading} />
     </div>
   )
-}
-
-// ------------------------------------------------------------
-
-function deltaLabel(delta: number, suffix: string, noChangeLabel: string): string {
-  if (delta === 0) return noChangeLabel
-  const sign = delta > 0 ? '+' : ''
-  return `${sign}${delta.toLocaleString()} ${suffix}`
 }
