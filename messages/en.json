@@ -98,7 +98,7 @@
     },
     "activityFeed": {
       "title": "Recent Activity",
-      "viewAll": "View all →",
+      "viewAll": "View all",
       "noActivity": "No activity yet",
       "noActivityHint": "Activity from messages, deals, broadcasts, and automations will appear here.",
       "showingOf": "Showing {visible} of {totalLoaded}{plus}",

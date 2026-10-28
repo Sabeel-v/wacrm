@@ -98,7 +98,7 @@
     },
     "activityFeed": {
       "title": "Atividade recente",
-      "viewAll": "Ver tudo →",
+      "viewAll": "Ver tudo",
       "noActivity": "Nenhuma atividade ainda",
       "noActivityHint": "A atividade de mensagens, negócios, disparos e automações aparecerá aqui.",
       "showingOf": "Mostrando {visible} de {totalLoaded}{plus}",
