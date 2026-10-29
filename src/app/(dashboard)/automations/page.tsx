@@ -306,9 +306,6 @@ function AutomationCard({
               </span>
             )}
           </div>
-          {automation.description && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{automation.description}</p>
-          )}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span
               className={cn(
