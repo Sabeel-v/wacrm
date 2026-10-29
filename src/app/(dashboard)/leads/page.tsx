@@ -2,10 +2,6 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  UserCheck,
-  Users,
-  TrendingUp,
-  UserPlus,
   Search,
   Download,
   Plus,
@@ -370,48 +366,28 @@ export default function LeadsPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Users className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground">Total Leads</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">
             {totalLeads}
           </p>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Qualified Leads</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
-              <UserCheck className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground">Qualified Leads</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">
             {qualifiedLeads}
           </p>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">Conversion Rate</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-              <TrendingUp className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground">Conversion Rate</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">
             {conversionRate}%
           </p>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">New Today</p>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
-              <UserPlus className="h-4 w-4" />
-            </div>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground">New Today</p>
           <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">
             {newToday}
           </p>
