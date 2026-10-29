@@ -79,6 +79,7 @@ export default function LeadsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [assignedFilter, setAssignedFilter] = useState<string>("All");
 
   const [leads, setLeads] = useState<LeadItem[]>([]);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -212,6 +213,15 @@ export default function LeadsPage() {
     return Array.from(set);
   }, [stages, leads]);
 
+  // Assignee options for the Assigned To filter dropdown
+  const assigneeOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of leads) {
+      if (l.assignedTo && l.assignedTo !== "Unassigned") set.add(l.assignedTo);
+    }
+    return Array.from(set).sort();
+  }, [leads]);
+
   // Filtered leads based on search query and status dropdown
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -227,9 +237,12 @@ export default function LeadsPage() {
       const matchesStatus =
         statusFilter === "All" || lead.status === statusFilter;
 
-      return matchesSearch && matchesStatus;
+      const matchesAssigned =
+        assignedFilter === "All" || lead.assignedTo === assignedFilter;
+
+      return matchesSearch && matchesStatus && matchesAssigned;
     });
-  }, [leads, searchQuery, statusFilter]);
+  }, [leads, searchQuery, statusFilter, assignedFilter]);
 
   // KPI Calculations from real data
   const totalLeads = leads.length;
@@ -406,7 +419,7 @@ export default function LeadsPage() {
           />
         </div>
 
-        {/* Single Status Filter Dropdown */}
+        {/* Status & Assigned To Filter Dropdowns */}
         <div className="flex items-center gap-2">
           <Select
             value={statusFilter}
@@ -421,6 +434,24 @@ export default function LeadsPage() {
               {statusOptions.map((status) => (
                 <SelectItem key={status} value={status}>
                   {status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={assignedFilter}
+            onValueChange={(val) => setAssignedFilter(val || "All")}
+          >
+            <SelectTrigger className="w-[180px] h-9 text-xs bg-card border-border">
+              <span className="text-muted-foreground mr-1">Assigned:</span>
+              <SelectValue placeholder="All Agents" />
+            </SelectTrigger>
+            <SelectContent className="bg-popover border-border">
+              <SelectItem value="All">All Agents</SelectItem>
+              {assigneeOptions.map((agent) => (
+                <SelectItem key={agent} value={agent}>
+                  {agent}
                 </SelectItem>
               ))}
             </SelectContent>
