@@ -2,15 +2,13 @@
 
 import { useMemo } from "react";
 import type { Deal, PipelineStage } from "@/types";
-import { BarChart3, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth } from "@/hooks/use-auth";
-import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
 
 interface PipelineAnalyticsProps {
@@ -20,13 +18,12 @@ interface PipelineAnalyticsProps {
 
 export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
   const t = useTranslations("Pipelines.analytics");
-  const { defaultCurrency } = useAuth();
   const sortedStages = useMemo(
     () => [...stages].sort((a, b) => a.position - b.position),
     [stages],
   );
 
-  const stats = useMemo(() => {
+  const stageItems = useMemo(() => {
     const dealsByStage = new Map<string, Deal[]>();
     for (const stage of sortedStages) dealsByStage.set(stage.id, []);
     for (const deal of deals) {
@@ -34,42 +31,19 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
       if (bucket) bucket.push(deal);
     }
 
-    const totalCount = deals.length;
-    const totalValue = deals.reduce((sum, d) => sum + Number(d.value || 0), 0);
-
-    const stageItems = sortedStages.map((stage) => {
+    return sortedStages.map((stage) => {
       const stageDeals = dealsByStage.get(stage.id) ?? [];
-      const count = stageDeals.length;
-      const stageValue = stageDeals.reduce(
-        (sum, d) => sum + Number(d.value || 0),
-        0,
-      );
       return {
         stage,
-        count,
-        totalValue: stageValue,
+        count: stageDeals.length,
       };
     });
-
-    return {
-      totalCount,
-      totalValue,
-      stageItems,
-    };
   }, [sortedStages, deals]);
 
   return (
     <TooltipProvider>
       <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card/60 p-4 sm:grid-cols-3 xl:grid-cols-6">
-        <Metric
-          icon={<BarChart3 className="h-4 w-4 text-primary shrink-0" />}
-          label={t("totalDeals")}
-          value={String(stats.totalCount)}
-          subValue={formatCurrency(stats.totalValue, defaultCurrency)}
-          tooltip={`${t("totalDeals")}: ${stats.totalCount} deals (${formatCurrency(stats.totalValue, defaultCurrency)})`}
-          t={t}
-        />
-        {stats.stageItems.map(({ stage, count, totalValue }) => (
+        {stageItems.map(({ stage, count }) => (
           <Metric
             key={stage.id}
             icon={
@@ -81,8 +55,7 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
             }
             label={stage.name}
             value={String(count)}
-            subValue={formatCurrency(totalValue, defaultCurrency)}
-            tooltip={`${stage.name}: ${count} ${count === 1 ? "deal" : "deals"} (${formatCurrency(totalValue, defaultCurrency)})`}
+            tooltip={`${stage.name}: ${count} ${count === 1 ? "lead" : "leads"}`}
             t={t}
           />
         ))}
@@ -95,14 +68,12 @@ function Metric({
   icon,
   label,
   value,
-  subValue,
   tooltip,
   t,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  subValue?: string;
   tooltip: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any;
@@ -130,9 +101,6 @@ function Metric({
         </Tooltip>
       </div>
       <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
-      {subValue && (
-        <p className="text-xs text-muted-foreground truncate">{subValue}</p>
-      )}
     </div>
   );
 }
