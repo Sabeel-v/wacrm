@@ -46,9 +46,6 @@ export default function AgentsPage() {
           {t('title')}
         </h1>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {t('description')}
-      </p>
 
       {decided && (
         <Tabs
