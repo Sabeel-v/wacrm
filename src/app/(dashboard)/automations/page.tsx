@@ -192,7 +192,6 @@ export default function AutomationsPage() {
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="text-sm font-semibold text-foreground">{t.name}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
                 </button>
               )
             })}
