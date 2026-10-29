@@ -277,6 +277,39 @@ describe('planBroadcastResume', () => {
     expect(plan.planned.map((p) => p.params)).toEqual([[], []]);
   });
 
+  it('carries frozen message params and honours a smaller per-pass cap', async () => {
+    const withMedia = {
+      ...recipient('r1', '+15551234567'),
+      message_params: {
+        headerMediaUrl: 'https://cdn.test/a.jpg',
+        buttonParams: { 0: 'tok-1' },
+      },
+    };
+    const { plan, remaining } = await planBroadcastResume(
+      planDb({
+        broadcast: BROADCAST,
+        config: CONFIG,
+        recipients: [withMedia, recipient('r2', '+15559876543')],
+      }),
+      'acct-1',
+      'bc-1',
+      'pending',
+      1,
+    );
+    expect(plan.planned).toEqual([
+      {
+        recipientRowId: 'r1',
+        phone: '15551234567',
+        params: ['A123'],
+        messageParams: {
+          headerMediaUrl: 'https://cdn.test/a.jpg',
+          buttonParams: { 0: 'tok-1' },
+        },
+      },
+    ]);
+    expect(remaining).toBe(1);
+  });
+
   it('fails unsendable rows up front so they stop blocking the status', async () => {
     const writes: PlanWrites = {};
     const { plan, unsendable } = await planBroadcastResume(

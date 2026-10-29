@@ -42,6 +42,10 @@ import {
   deliverBroadcast,
   BroadcastError,
 } from '@/lib/whatsapp/broadcast-core';
+import {
+  enqueueBroadcastPass,
+  isBroadcastQueueEnabled,
+} from '@/lib/whatsapp/broadcast-queue';
 
 export async function POST(request: Request) {
   try {
@@ -74,10 +78,20 @@ export async function POST(request: Request) {
       })),
     });
 
-    // Fan out after the response is sent. Uses the same service-role
-    // client — no request-scoped auth needed for the Meta calls or
-    // the account-scoped row updates.
-    after(() => deliverBroadcast(ctx.supabase, plan));
+    if (isBroadcastQueueEnabled()) {
+      // Durable path: the QStash worker sends in capped passes, so a
+      // large audience isn't bound by this route's max duration.
+      await enqueueBroadcastPass(
+        ctx.supabase,
+        { broadcastId: plan.broadcastId, accountId: ctx.accountId },
+        { origin: new URL(request.url).origin }
+      );
+    } else {
+      // Fan out after the response is sent. Uses the same service-role
+      // client — no request-scoped auth needed for the Meta calls or
+      // the account-scoped row updates.
+      after(() => deliverBroadcast(ctx.supabase, plan));
+    }
 
     return ok(
       {

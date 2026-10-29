@@ -22,6 +22,7 @@ import { BroadcastError, type BroadcastPlan } from '@/lib/whatsapp/broadcast-cor
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 
 /** Which recipients a resume pass picks up. */
 export type ResumeScope = 'pending' | 'failed' | 'all';
@@ -118,7 +119,16 @@ export interface ResumePlan {
 interface RecipientRow {
   id: string;
   template_params: unknown;
+  message_params?: unknown;
   contact: { phone?: string | null } | { phone?: string | null }[] | null;
+}
+
+/** A JSON object off the row, or undefined for NULL / anything else. */
+function rowMessageParams(row: RecipientRow): SendTimeParams | undefined {
+  const mp = row.message_params;
+  return mp && typeof mp === 'object' && !Array.isArray(mp)
+    ? (mp as SendTimeParams)
+    : undefined;
 }
 
 /** Supabase renders an embedded to-one join as an object or a 1-array. */
@@ -136,13 +146,17 @@ function contactPhone(row: RecipientRow): string | null {
  * sends what the original pass would have sent even if the contact has
  * been edited since.
  *
+ * `maxPerPass` lowers the per-pass cap — the QStash worker sends
+ * smaller passes so each fits one function invocation.
+ *
  * Throws {@link BroadcastError}; the route maps it.
  */
 export async function planBroadcastResume(
   db: SupabaseClient,
   accountId: string,
   broadcastId: string,
-  scope: ResumeScope
+  scope: ResumeScope,
+  maxPerPass: number = RESUME_MAX_PER_REQUEST
 ): Promise<ResumePlan> {
   const { data: broadcast, error: bcError } = await db
     .from('broadcasts')
@@ -158,7 +172,7 @@ export async function planBroadcastResume(
   const statuses = scopeStatuses(scope);
   const { data: rawRows, error: recError } = await db
     .from('broadcast_recipients')
-    .select('id, template_params, contact:contacts(phone)')
+    .select('id, template_params, message_params, contact:contacts(phone)')
     .eq('broadcast_id', broadcastId)
     .in('status', statuses)
     // Oldest first, so repeated capped passes chew through the backlog
@@ -192,7 +206,10 @@ export async function planBroadcastResume(
       .in('id', unsendable);
   }
 
-  const slice = sendable.slice(0, RESUME_MAX_PER_REQUEST);
+  const slice = sendable.slice(
+    0,
+    Math.min(RESUME_MAX_PER_REQUEST, Math.max(1, maxPerPass))
+  );
   const remaining = sendable.length - slice.length;
 
   if (slice.length === 0) {
@@ -239,13 +256,17 @@ export async function planBroadcastResume(
     phoneNumberId: config.phone_number_id,
     accessToken: decrypt(config.access_token),
     templateRow: resolvedTemplate.row,
-    planned: slice.map((row) => ({
-      recipientRowId: row.id,
-      phone: sanitizePhoneForMeta(contactPhone(row) ?? ''),
-      params: Array.isArray(row.template_params)
-        ? row.template_params.filter((p): p is string => typeof p === 'string')
-        : [],
-    })),
+    planned: slice.map((row) => {
+      const messageParams = rowMessageParams(row);
+      return {
+        recipientRowId: row.id,
+        phone: sanitizePhoneForMeta(contactPhone(row) ?? ''),
+        params: Array.isArray(row.template_params)
+          ? row.template_params.filter((p): p is string => typeof p === 'string')
+          : [],
+        ...(messageParams ? { messageParams } : {}),
+      };
+    }),
     rejected: 0,
   };
 

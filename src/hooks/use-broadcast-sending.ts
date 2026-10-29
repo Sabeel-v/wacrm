@@ -499,6 +499,104 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         );
       }
 
+      // Media-header templates (image/video/document) require a media
+      // URL on every send. Collected in the personalize step and applied
+      // to all recipients; falls back to the template's stored URL on the
+      // server when omitted.
+      const headerType = payload.template.header_type;
+      const isMediaHeader =
+        headerType === 'image' ||
+        headerType === 'video' ||
+        headerType === 'document';
+      const headerMediaUrl = payload.headerMediaUrl?.trim();
+      const baseMessageParams: SendTimeParams =
+        isMediaHeader && headerMediaUrl ? { headerMediaUrl } : {};
+
+      // Method 2 (URL Redirect Tracking):
+      // Check for dynamic URL buttons (buttons with {{1}} suffix).
+      // For each recipient, generate unique tracking tokens and record them
+      // in broadcast_url_tokens for click-attribution and redirecting.
+      // Done before the recipient insert so each row can carry its tokens
+      // in message_params — a server-side pass (QStash or Resume) reads
+      // them from there.
+      const dynamicUrlButtons = (payload.template.buttons ?? [])
+        .map((btn, index) => ({ btn, index }))
+        .filter(
+          (item): item is { btn: Extract<TemplateButton, { type: 'URL' }>; index: number } =>
+            item.btn.type === 'URL' && extractVariableIndices(item.btn.url).length > 0
+        );
+
+      const tokensByContactId = new Map<string, Record<number, string>>();
+
+      if (dynamicUrlButtons.length > 0) {
+        const urlTokenRows: Array<{
+          account_id: string;
+          broadcast_id: string;
+          contact_id: string;
+          recipient_phone: string | null;
+          button_index: number;
+          button_name: string;
+          token: string;
+          destination_url: string;
+        }> = [];
+
+        for (const contact of contacts) {
+          const contactId = contact.id;
+          const buttonTokens: Record<number, string> = {};
+
+          for (const { btn, index } of dynamicUrlButtons) {
+            const token = generateTrackingToken();
+            buttonTokens[index] = token;
+
+            let destUrl =
+              payload.urlDestinations?.[index]?.trim() ||
+              btn.example?.trim() ||
+              '';
+            if (!destUrl && btn.url) {
+              destUrl = btn.url.replace(/\{\{\d+\}\}/g, '').trim();
+            }
+            if (!destUrl) {
+              destUrl = 'https://example.com';
+            }
+
+            urlTokenRows.push({
+              account_id: accountId,
+              broadcast_id: broadcast.id,
+              contact_id: contactId,
+              recipient_phone: contact.phone ?? null,
+              button_index: index,
+              button_name: btn.text,
+              token,
+              destination_url: destUrl,
+            });
+          }
+
+          tokensByContactId.set(contactId, buttonTokens);
+        }
+
+        if (urlTokenRows.length > 0) {
+          for (let i = 0; i < urlTokenRows.length; i += INSERT_BATCH_SIZE) {
+            const batchSlice = urlTokenRows.slice(i, i + INSERT_BATCH_SIZE);
+            const { error: tokenInsertErr } = await supabase
+              .from('broadcast_url_tokens')
+              .insert(batchSlice);
+            if (tokenInsertErr) {
+              console.error('[broadcast-sending] Failed to insert URL tokens:', tokenInsertErr.message);
+            }
+          }
+        }
+      }
+
+      /** Header media + button tokens for one contact, or null if none. */
+      const messageParamsFor = (contactId: string): SendTimeParams | null => {
+        const buttonTokens = tokensByContactId.get(contactId);
+        const mp: SendTimeParams = {
+          ...baseMessageParams,
+          ...(buttonTokens ? { buttonParams: buttonTokens } : {}),
+        };
+        return Object.keys(mp).length > 0 ? mp : null;
+      };
+
       // ── Step 3: Insert recipient rows ─────────────────────────────
       // Custom values are fetched BEFORE the insert so each row can
       // carry its resolved template params. Those params are what makes
@@ -527,6 +625,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         contact_id: contact.id,
         status: 'pending' as const,
         template_params: paramsByContact.get(contact.id) ?? [],
+        message_params: messageParamsFor(contact.id),
       }));
 
       for (let i = 0; i < recipientRows.length; i += INSERT_BATCH_SIZE) {
@@ -553,8 +652,37 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         }
       }
 
-      // ── Step 4: Fetch recipients back (joined contact) ────────────
+      // ── Step 3b: Hand off to the background queue ─────────────────
+      // With QStash configured the server delivers the campaign and this
+      // tab is free to close. 501 means it isn't configured — fall
+      // through to the in-browser send loop below. Any other failure is
+      // surfaced rather than falling back: if the publish did land, a
+      // browser loop on top would message people twice. The campaign is
+      // left 'sending' with its recipients pending, so Resume on the
+      // detail page recovers it.
       setProgress(30);
+      const queueRes = await fetch(`/api/whatsapp/broadcast/${broadcast.id}/queue`, {
+        method: 'POST',
+      });
+      if (queueRes.ok) {
+        setProgress(100);
+        setBatchState((prev) => ({
+          ...prev,
+          status: 'completed',
+          totalRecipients: contacts.length,
+          progressPercent: 100,
+          statusMessage: `Queued ${contacts.length} recipients — sending in the background.`,
+        }));
+        return broadcast.id;
+      }
+      if (queueRes.status !== 501) {
+        const err = await queueRes.json().catch(() => ({}));
+        throw new Error(
+          `Broadcast saved but could not be queued: ${err.error || `HTTP ${queueRes.status}`}. Open it and use Resume.`,
+        );
+      }
+
+      // ── Step 4: Fetch recipients back (joined contact) ────────────
       const { data: recipients, error: recipientsFetchError } = await supabase
         .from('broadcast_recipients')
         .select('*, contact:contacts(*)')
@@ -565,93 +693,6 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       }
 
       const totalRecipients = recipients.length;
-
-      // Media-header templates (image/video/document) require a media
-      // Media-header templates (image/video/document) require a media
-      // URL on every send. Collected in the personalize step and applied
-      // to all recipients; falls back to the template's stored URL on the
-      // server when omitted.
-      const headerType = payload.template.header_type;
-      const isMediaHeader =
-        headerType === 'image' ||
-        headerType === 'video' ||
-        headerType === 'document';
-      const headerMediaUrl = payload.headerMediaUrl?.trim();
-      const baseMessageParams: SendTimeParams =
-        isMediaHeader && headerMediaUrl ? { headerMediaUrl } : {};
-
-      // Method 2 (URL Redirect Tracking):
-      // Check for dynamic URL buttons (buttons with {{1}} suffix).
-      // For each recipient, generate unique tracking tokens and record them
-      // in broadcast_url_tokens for click-attribution and redirecting.
-      const dynamicUrlButtons = (payload.template.buttons ?? [])
-        .map((btn, index) => ({ btn, index }))
-        .filter(
-          (item): item is { btn: Extract<TemplateButton, { type: 'URL' }>; index: number } =>
-            item.btn.type === 'URL' && extractVariableIndices(item.btn.url).length > 0
-        );
-
-      const tokensByContactId = new Map<string, Record<number, string>>();
-
-      if (dynamicUrlButtons.length > 0) {
-        const urlTokenRows: Array<{
-          account_id: string;
-          broadcast_id: string;
-          contact_id: string;
-          recipient_phone: string | null;
-          button_index: number;
-          button_name: string;
-          token: string;
-          destination_url: string;
-        }> = [];
-
-        for (const r of recipients) {
-          const contactId = r.contact_id;
-          if (!contactId) continue;
-          const buttonTokens: Record<number, string> = {};
-
-          for (const { btn, index } of dynamicUrlButtons) {
-            const token = generateTrackingToken();
-            buttonTokens[index] = token;
-
-            let destUrl =
-              payload.urlDestinations?.[index]?.trim() ||
-              btn.example?.trim() ||
-              '';
-            if (!destUrl && btn.url) {
-              destUrl = btn.url.replace(/\{\{\d+\}\}/g, '').trim();
-            }
-            if (!destUrl) {
-              destUrl = 'https://example.com';
-            }
-
-            urlTokenRows.push({
-              account_id: accountId,
-              broadcast_id: broadcast.id,
-              contact_id: contactId,
-              recipient_phone: r.contact?.phone ?? null,
-              button_index: index,
-              button_name: btn.text,
-              token,
-              destination_url: destUrl,
-            });
-          }
-
-          tokensByContactId.set(contactId, buttonTokens);
-        }
-
-        if (urlTokenRows.length > 0) {
-          for (let i = 0; i < urlTokenRows.length; i += INSERT_BATCH_SIZE) {
-            const batchSlice = urlTokenRows.slice(i, i + INSERT_BATCH_SIZE);
-            const { error: tokenInsertErr } = await supabase
-              .from('broadcast_url_tokens')
-              .insert(batchSlice);
-            if (tokenInsertErr) {
-              console.error('[broadcast-sending] Failed to insert URL tokens:', tokenInsertErr.message);
-            }
-          }
-        }
-      }
 
       // ── Step 4: Chunked Sequential Sending ───────────────────────
       const batches = chunkArray(recipients, CHUNK_SIZE);

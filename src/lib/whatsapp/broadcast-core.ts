@@ -27,6 +27,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
 
@@ -60,6 +61,8 @@ interface PlannedRecipient {
   recipientRowId: string;
   phone: string;
   params: string[];
+  /** Header media / button values frozen on the row (migration 046). */
+  messageParams?: SendTimeParams;
 }
 
 export interface BroadcastPlan {
@@ -246,7 +249,11 @@ export async function createBroadcast(
  * Fan out a {@link BroadcastPlan}: send each recipient's template
  * (phone-variant retry) and stamp its `broadcast_recipients` row.
  * Best-effort per recipient — one failure never aborts the rest.
- * Designed to run inside `after()`.
+ * Designed to run inside `after()` or a QStash worker pass.
+ *
+ * `concurrency` sends that many recipients at once (default 1, the
+ * original sequential behaviour). The QStash worker raises it so a
+ * capped pass fits comfortably inside one function invocation.
  *
  * The per-status count columns on `broadcasts` are owned by the DB
  * aggregate trigger (migrations 003/005): each recipient-row update
@@ -257,57 +264,80 @@ export async function createBroadcast(
  */
 export async function deliverBroadcast(
   db: SupabaseClient,
-  plan: BroadcastPlan
+  plan: BroadcastPlan,
+  { concurrency = 1 }: { concurrency?: number } = {}
 ): Promise<void> {
-  for (const recipient of plan.planned) {
-    const variants = phoneVariants(recipient.phone);
-    let sentMessageId: string | null = null;
-    let lastError: string | null = null;
-
-    for (const variant of variants) {
-      try {
-        const result = await sendTemplateMessage({
-          phoneNumberId: plan.phoneNumberId,
-          accessToken: plan.accessToken,
-          to: variant,
-          templateName: plan.templateName,
-          language: plan.templateLanguage,
-          template: plan.templateRow ?? undefined,
-          params: recipient.params,
-        });
-        sentMessageId = result.messageId;
-        lastError = null;
-        break;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        lastError = message;
-        // Only a "recipient not allowed" error is worth another variant.
-        if (!isRecipientNotAllowedError(message)) break;
-      }
-    }
-
-    if (sentMessageId) {
-      await db
-        .from('broadcast_recipients')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          whatsapp_message_id: sentMessageId,
-          error_message: null,
+  const step = Math.max(1, Math.floor(concurrency));
+  for (let i = 0; i < plan.planned.length; i += step) {
+    await Promise.all(
+      plan.planned.slice(i, i + step).map((recipient) =>
+        deliverOne(db, plan, recipient).catch((err) => {
+          // deliverOne never throws on a Meta error; this is a DB write
+          // failing. Log and move on — the row stays 'pending' and the
+          // next pass picks it up.
+          console.error(
+            '[broadcast-core] recipient stamp failed:',
+            err instanceof Error ? err.message : err
+          );
         })
-        .eq('id', recipient.recipientRowId);
-    } else {
-      await db
-        .from('broadcast_recipients')
-        .update({
-          status: 'failed',
-          error_message: lastError || 'Unknown error',
-        })
-        .eq('id', recipient.recipientRowId);
-    }
+      )
+    );
   }
 
   await finalizeBroadcastStatus(db, plan.broadcastId);
+}
+
+async function deliverOne(
+  db: SupabaseClient,
+  plan: BroadcastPlan,
+  recipient: PlannedRecipient
+): Promise<void> {
+  const variants = phoneVariants(recipient.phone);
+  let sentMessageId: string | null = null;
+  let lastError: string | null = null;
+
+  for (const variant of variants) {
+    try {
+      const result = await sendTemplateMessage({
+        phoneNumberId: plan.phoneNumberId,
+        accessToken: plan.accessToken,
+        to: variant,
+        templateName: plan.templateName,
+        language: plan.templateLanguage,
+        template: plan.templateRow ?? undefined,
+        params: recipient.params,
+        messageParams: recipient.messageParams,
+      });
+      sentMessageId = result.messageId;
+      lastError = null;
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      lastError = message;
+      // Only a "recipient not allowed" error is worth another variant.
+      if (!isRecipientNotAllowedError(message)) break;
+    }
+  }
+
+  if (sentMessageId) {
+    await db
+      .from('broadcast_recipients')
+      .update({
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        whatsapp_message_id: sentMessageId,
+        error_message: null,
+      })
+      .eq('id', recipient.recipientRowId);
+  } else {
+    await db
+      .from('broadcast_recipients')
+      .update({
+        status: 'failed',
+        error_message: lastError || 'Unknown error',
+      })
+      .eq('id', recipient.recipientRowId);
+  }
 }
 
 /**

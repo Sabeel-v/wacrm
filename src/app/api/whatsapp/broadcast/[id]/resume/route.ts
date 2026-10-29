@@ -31,6 +31,11 @@ import {
   RESUME_SCOPES,
   type ResumeScope,
 } from '@/lib/whatsapp/broadcast-resume';
+import {
+  enqueueBroadcastPass,
+  isBroadcastQueueEnabled,
+  isQueueActive,
+} from '@/lib/whatsapp/broadcast-queue';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
   checkRateLimit,
@@ -64,6 +69,10 @@ export async function POST(
     const scope: ResumeScope = RESUME_SCOPES.includes(body?.scope)
       ? body.scope
       : 'pending';
+
+    if (isBroadcastQueueEnabled()) {
+      return await resumeViaQueue(request, supabase, accountId, id, scope);
+    }
 
     // Claim BEFORE planning. Two clicks on Resume, or a click while an
     // earlier pass is still running, would otherwise both build a plan
@@ -140,4 +149,90 @@ export async function POST(
     console.error('Error in broadcast resume POST:', error);
     return toErrorResponse(error);
   }
+}
+
+/**
+ * QStash mode: hand the leftovers to the background worker instead of
+ * fanning out in `after()`. The worker only ever sends 'pending' rows,
+ * so a retry of failed recipients flips them back to 'pending' first —
+ * that also keeps a chain from re-sending the same failures forever.
+ */
+async function resumeViaQueue(
+  request: Request,
+  supabase: Awaited<ReturnType<typeof requireRole>>['supabase'],
+  accountId: string,
+  id: string,
+  scope: ResumeScope
+) {
+  const { data: broadcast, error } = await supabase
+    .from('broadcasts')
+    .select('id, status, delivery_queued_at')
+    .eq('id', id)
+    .eq('account_id', accountId)
+    .maybeSingle();
+  if (error || !broadcast) {
+    return NextResponse.json({ error: 'Broadcast not found' }, { status: 404 });
+  }
+  if (broadcast.status === 'sending' && isQueueActive(broadcast.delivery_queued_at)) {
+    return NextResponse.json(
+      {
+        error:
+          'This broadcast is already being delivered in the background. Wait for it to finish before resuming again.',
+      },
+      { status: 409 }
+    );
+  }
+
+  // Ownership checked above; the service-role client does the writes.
+  const admin = supabaseAdmin();
+
+  if (scope !== 'pending') {
+    const { error: resetErr } = await admin
+      .from('broadcast_recipients')
+      .update({ status: 'pending', error_message: null })
+      .eq('broadcast_id', id)
+      .eq('status', 'failed');
+    if (resetErr) {
+      console.error('[broadcast-resume] failed→pending reset failed:', resetErr.message);
+      return NextResponse.json({ error: 'Failed to queue retry' }, { status: 500 });
+    }
+  }
+
+  const { count: pending } = await admin
+    .from('broadcast_recipients')
+    .select('id', { count: 'exact', head: true })
+    .eq('broadcast_id', id)
+    .eq('status', 'pending');
+  if (!pending) {
+    return NextResponse.json(
+      {
+        error:
+          scope === 'failed'
+            ? 'This broadcast has no failed recipients to retry'
+            : 'This broadcast has no recipients left to send',
+        code: 'nothing_to_resume',
+      },
+      { status: 400 }
+    );
+  }
+
+  await markBroadcastSending(admin, id);
+  await enqueueBroadcastPass(
+    admin,
+    { broadcastId: id, accountId },
+    { origin: new URL(request.url).origin }
+  );
+
+  return NextResponse.json(
+    {
+      success: true,
+      broadcast_id: id,
+      scope,
+      resuming: pending,
+      remaining: 0,
+      unsendable: 0,
+      queued: true,
+    },
+    { status: 202 }
+  );
 }

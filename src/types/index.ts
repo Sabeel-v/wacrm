@@ -443,6 +443,12 @@ export interface Broadcast {
    * send. Added in migration 038.
    */
   delivery_locked_at?: string | null;
+  /**
+   * Last time a QStash delivery pass was enqueued or ran. A recent
+   * value means the campaign is being delivered in the background, not
+   * stalled. Added in migration 046.
+   */
+  delivery_queued_at?: string | null;
   created_at: string;
 }
 
@@ -474,6 +480,12 @@ export interface BroadcastRecipient {
    * Added in migration 038; null on rows created before it.
    */
   template_params?: string[] | null;
+  /**
+   * Structured per-send values (header media URL, URL-button tracking
+   * tokens), frozen at plan time so a server-side pass sends what the
+   * wizard would have. Added in migration 046.
+   */
+  message_params?: Record<string, unknown> | null;
   created_at: string;
   contact?: Contact;
 }
