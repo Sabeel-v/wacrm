@@ -245,7 +245,6 @@ export function AiConfig() {
     <div>
       <SettingsPanelHead
         title={t('title')}
-        description={t('description')}
       />
 
       {!canEdit && (

@@ -88,9 +88,6 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium text-foreground">{t('title')}</span>
-          <span className="text-xs text-muted-foreground">
-            {t('subtitle')}
-          </span>
         </div>
         <Button
           variant="ghost"
