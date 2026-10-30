@@ -15,7 +15,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card';
 import {
   Select,
@@ -259,9 +258,6 @@ export function AiConfig() {
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-4 w-4 text-primary" /> {t('providerAndKey')}
             </CardTitle>
-            <CardDescription>
-              {t('encryptionNotice')}
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -349,9 +345,6 @@ export function AiConfig() {
             <div className="space-y-2">
               <Label htmlFor="ai-embeddings-key">
                 {t('embeddingsKey')}{' '}
-                <span className="font-normal text-muted-foreground">
-                  {t('optionalSemanticSearch')}
-                </span>
               </Label>
               <Input
                 id="ai-embeddings-key"
@@ -371,11 +364,6 @@ export function AiConfig() {
                 disabled={disabled}
                 autoComplete="off"
               />
-              <p className="text-xs text-muted-foreground">
-                {t('embeddingsHint', {
-                  sameKeyText: provider === 'openai' ? t('sameKeyText') : '',
-                })}
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -383,9 +371,6 @@ export function AiConfig() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{t('behaviour')}</CardTitle>
-            <CardDescription>
-              {t('behaviourDesc')}
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -394,7 +379,6 @@ export function AiConfig() {
                 id="ai-prompt"
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
-                placeholder={t('promptPlaceholder')}
                 rows={5}
                 disabled={disabled}
               />
@@ -404,9 +388,6 @@ export function AiConfig() {
               <div>
                 <p className="text-sm font-medium text-foreground">
                   {t('enableAssistant')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('enableAssistantDesc')}
                 </p>
               </div>
               <Switch
@@ -421,9 +402,6 @@ export function AiConfig() {
                 <p className="text-sm font-medium text-foreground">
                   {t('autoReply')}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('autoReplyDesc')}
-                </p>
               </div>
               <Switch
                 checked={autoReplyEnabled}
@@ -435,9 +413,6 @@ export function AiConfig() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <Label htmlFor="ai-max">{t('maxAutoReplies')}</Label>
-                <p className="text-xs text-muted-foreground">
-                  {t('maxAutoRepliesDesc')}
-                </p>
               </div>
               <Input
                 id="ai-max"
@@ -457,9 +432,6 @@ export function AiConfig() {
 
             <div className="space-y-2">
               <Label htmlFor="ai-handoff">{t('handoffTo')}</Label>
-              <p className="text-xs text-muted-foreground">
-                {t('handoffToDesc')}
-              </p>
               <Select
                 value={handoffAgentId || HANDOFF_QUEUE}
                 onValueChange={(v) =>
