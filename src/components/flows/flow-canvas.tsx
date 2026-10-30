@@ -43,7 +43,6 @@ import {
   BackgroundVariant,
   Controls,
   Handle,
-  MiniMap,
   Panel,
   Position,
   ReactFlow,
@@ -594,17 +593,6 @@ function FlowCanvasInner() {
           <Controls
             className="!border-border !bg-card [&_button]:!border-border [&_button]:!bg-card [&_button:hover]:!bg-muted [&_button_svg]:!fill-foreground !overflow-hidden !rounded-xl !border !shadow-[0_6px_20px_-8px_rgba(0,0,0,0.5)]"
             showInteractive={false}
-          />
-          <MiniMap
-            pannable
-            zoomable
-            nodeColor={(n) =>
-              nodeColors((n.data as NodeData).node.node_type).solid
-            }
-            nodeStrokeWidth={0}
-            nodeBorderRadius={3}
-            maskColor="color-mix(in oklch, var(--background) 70%, transparent)"
-            className="!border-border !bg-card !rounded-xl !border !shadow-[0_6px_20px_-8px_rgba(0,0,0,0.5)]"
           />
           <Panel position="top-left" className="!top-4 !left-4">
             <CanvasAddNodeButton t={t} />

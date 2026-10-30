@@ -159,17 +159,6 @@ export function EditorHeader() {
           </Button>
         </div>
       </div>
-
-      {/* ---- description note (subtle, inline-editable) ---- */}
-      <input
-        value={state.description}
-        onChange={(e) =>
-          setState((s) => ({ ...s, description: e.target.value }))
-        }
-        placeholder={t("descriptionPlaceholder")}
-        aria-label={t("descriptionLabel")}
-        className="w-full max-w-[78ch] rounded-md border border-transparent bg-transparent px-2 py-1 text-[13px] text-muted-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-muted/50 focus:border-primary focus:bg-transparent focus:text-foreground"
-      />
     </div>
   );
 }
