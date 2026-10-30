@@ -1391,7 +1391,8 @@
       "fixIssues": "Corrige los problemas de abajo antes de activar",
       "save": "Guardar",
       "descriptionPlaceholder": "Agrega una breve descripción (interna; los clientes no la ven)",
-      "descriptionLabel": "Descripción del flujo"
+      "descriptionLabel": "Descripción del flujo",
+      "issues": "Problemas"
     }
   },
   "Settings": {

@@ -7,8 +7,6 @@
  * content area (toolbar → mode row → stage → validation bar), matching
  * the Flow Builder design handoff:
  *   - A segmented Canvas / List control on the left of the mode row.
- *   - A node-type legend on the right so the canvas's per-type colors
- *     are decodable at a glance.
  *   - The active view is mounted inside a rounded "stage" that owns its
  *     own scroll/overflow, so the canvas can fill available height and
  *     the list scrolls internally.
@@ -29,10 +27,9 @@ import { GitFork, List } from "lucide-react";
 
 import { FlowBuilder } from "./flow-builder";
 import { FlowCanvas } from "./flow-canvas";
-import { FlowEditorProvider } from "./flow-editor-state";
+import { FlowEditorProvider, useFlowEditor } from "./flow-editor-state";
 import { EditorHeader } from "./header";
 import { ValidationPanel } from "./validation-panel";
-import { NODE_META, nodeColors, type NodeType } from "./shared";
 import { cn } from "@/lib/utils";
 import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
 import { useTranslations } from "next-intl";
@@ -49,20 +46,15 @@ type View = "canvas" | "list";
 
 const STORAGE_KEY = "wacrm.flowEditor.view";
 
-
 interface Props {
   initialFlow: FlowRow;
   initialNodes: FlowNodeRow[];
 }
 
-export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
+function FlowEditorInner() {
   const t = useTranslations("Flows.builder");
+  const { showIssues } = useFlowEditor();
 
-  // Read the persisted choice in the useState initializer. Safe even
-  // though this is a client component because the parent page only
-  // mounts us AFTER a client-side fetch resolves — there's no SSR
-  // pass for this subtree, so no hydration mismatch to worry about.
-  // Default to `canvas` (the new default) when nothing is saved.
   const [view, setView] = useState<View>(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -73,10 +65,6 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
     return "canvas";
   });
 
-  // Live mobile detection. We don't render canvas under the
-  // breakpoint regardless of `view` — but we keep `view` itself
-  // intact so the user's preference comes back when they widen
-  // again (e.g. rotating a tablet, resizing a window).
   const isMobile = useMatchMedia(MOBILE_BREAKPOINT);
   const effectiveView: View = isMobile ? "list" : view;
 
@@ -90,53 +78,57 @@ export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
   };
 
   return (
-    <FlowEditorProvider initialFlow={initialFlow} initialNodes={initialNodes}>
-      <div className="flex h-full min-h-0 flex-col">
-        <EditorHeader />
+    <div className="flex h-full min-h-0 flex-col">
+      <EditorHeader />
 
-        {/* ---- mode row: view toggle + node-type legend ----
-            Omitted entirely on mobile (canvas is unavailable there and
-            the legend is lg-only), so there's no empty band above the
-            stage on small screens. */}
-        {!isMobile && (
-          <div className="flex items-center gap-4 px-6 py-3.5">
-            <div
-              role="group"
-              aria-label={t("editorView")}
-              className="inline-flex gap-0.5 rounded-lg border border-border bg-muted p-0.5"
-            >
-              <SegButton
-                active={effectiveView === "canvas"}
-                onClick={() => choose("canvas")}
-                icon={<GitFork className="h-3.5 w-3.5" />}
-                label={t("canvasView")}
-              />
-              <SegButton
-                active={effectiveView === "list"}
-                onClick={() => choose("list")}
-                icon={<List className="h-3.5 w-3.5" />}
-                label={t("listView")}
-              />
-            </div>
+      {!isMobile && (
+        <div className="flex items-center gap-4 px-6 py-3.5">
+          <div
+            role="group"
+            aria-label={t("editorView")}
+            className="inline-flex gap-0.5 rounded-lg border border-border bg-muted p-0.5"
+          >
+            <SegButton
+              active={effectiveView === "canvas"}
+              onClick={() => choose("canvas")}
+              icon={<GitFork className="h-3.5 w-3.5" />}
+              label={t("canvasView")}
+            />
+            <SegButton
+              active={effectiveView === "list"}
+              onClick={() => choose("list")}
+              icon={<List className="h-3.5 w-3.5" />}
+              label={t("listView")}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ---- stage: the active view, owning its own overflow ---- */}
+      <div className="relative mx-6 min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card-2">
+        {effectiveView === "canvas" ? (
+          <FlowCanvas />
+        ) : (
+          <div className="absolute inset-0 overflow-y-auto">
+            <FlowBuilder />
           </div>
         )}
+      </div>
 
-        {/* ---- stage: the active view, owning its own overflow ---- */}
-        <div className="relative mx-6 min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card-2">
-          {effectiveView === "canvas" ? (
-            <FlowCanvas />
-          ) : (
-            <div className="absolute inset-0 overflow-y-auto">
-              <FlowBuilder />
-            </div>
-          )}
-        </div>
-
-        {/* ---- validation / activate-readiness bar ---- */}
+      {/* ---- validation / activate-readiness bar (only visible when toggled via header Issues button) ---- */}
+      {showIssues && (
         <div className="px-6 pb-5 pt-3">
           <ValidationPanel />
         </div>
-      </div>
+      )}
+    </div>
+  );
+}
+
+export function FlowEditorShell({ initialFlow, initialNodes }: Props) {
+  return (
+    <FlowEditorProvider initialFlow={initialFlow} initialNodes={initialNodes}>
+      <FlowEditorInner />
     </FlowEditorProvider>
   );
 }
@@ -155,8 +147,6 @@ function useMatchMedia(query: string): boolean {
     if (typeof window === "undefined") return;
     const mql = window.matchMedia(query);
     const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
-    // Safari < 14 still uses addListener; addEventListener is the
-    // modern path. Both fire identically.
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
   }, [query]);

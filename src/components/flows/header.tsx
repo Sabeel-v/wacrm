@@ -28,6 +28,7 @@ import {
   ArrowLeft,
   CircleDot,
   History,
+  CircleAlert,
   Loader2,
   PauseCircle,
   PlayCircle,
@@ -57,6 +58,9 @@ export function EditorHeader() {
     save,
     setStatus,
     deleteFlow,
+    issues,
+    showIssues,
+    toggleIssues,
   } = useFlowEditor();
 
   return (
@@ -106,6 +110,25 @@ export function EditorHeader() {
             {t("runs")}
             <span className="ml-0.5 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
               {flow.execution_count}
+            </span>
+          </Button>
+          <Button
+            variant={showIssues ? "secondary" : "ghost"}
+            size="sm"
+            onClick={toggleIssues}
+            className={showIssues ? "bg-muted text-foreground" : ""}
+          >
+            <CircleAlert className="h-3.5 w-3.5" />
+            {t("issues")}
+            <span
+              className={cn(
+                "ml-0.5 rounded px-1.5 py-0.5 font-mono text-[11px]",
+                issues.length > 0
+                  ? "bg-red-500/15 text-red-400 font-semibold"
+                  : "bg-emerald-500/15 text-emerald-400"
+              )}
+            >
+              {issues.length}
             </span>
           </Button>
           <Button

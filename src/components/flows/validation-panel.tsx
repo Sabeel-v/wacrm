@@ -17,14 +17,14 @@
  * concept). User can switch to List to address them.
  */
 
-import { CircleAlert, CircleCheck } from "lucide-react";
+import { CircleAlert, CircleCheck, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import type { ValidationIssue } from "@/lib/flows/validate";
 import { useFlowEditor } from "./flow-editor-state";
 
 export function ValidationPanel() {
-  const { issues, requestFlash } = useFlowEditor();
+  const { issues, requestFlash, setShowIssues } = useFlowEditor();
   const t = useTranslations("Flows.validation");
 
   if (issues.length === 0) {

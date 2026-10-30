@@ -90,6 +90,9 @@ export interface FlowEditorContextValue {
   activating: boolean;
   issues: ValidationIssue[];
   canActivate: boolean;
+  showIssues: boolean;
+  setShowIssues: React.Dispatch<React.SetStateAction<boolean>>;
+  toggleIssues: () => void;
 
   // Node mutations. addNode returns the generated key so the caller
   // (a NodeCard "Add" button or canvas "+" button) can scroll to /
@@ -272,6 +275,8 @@ export function FlowEditorProvider({
   // different issue cancels the previous timeout instead of letting
   // the first flash linger past the new one.
   const [flashKey, setFlashKey] = useState<string | null>(null);
+  const [showIssues, setShowIssues] = useState(false);
+  const toggleIssues = useCallback(() => setShowIssues((v) => !v), []);
   const flashTimeoutRef = useRef<number | null>(null);
   const requestFlash = useCallback((key: string) => {
     if (flashTimeoutRef.current !== null) {
