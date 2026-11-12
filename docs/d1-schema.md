@@ -51,7 +51,7 @@ The seed creates one account, **Demo Business**, with four users: `owner@`, `adm
 | `account_role_enum` | `TEXT CHECK (IN ('owner','admin','agent','viewer'))` | |
 | `deals.value NUMERIC(12,2)` | **`deals.value_cents INTEGER`** (renamed) | API converts: `value_cents = Math.round(value * 100)`. |
 | `DATE` (`deals.expected_close_date`) | `TEXT` `YYYY-MM-DD`, CHECK it is a real date | |
-| `contacts.phone_normalized GENERATED (regexp_replace(phone,'\D','','g'))` | `TEXT NOT NULL CHECK (digits only)`, **no default** | App must set it on every insert and on every `phone` update: `phone.replace(/\D/g, '')`. The insert fails if it's missing. |
+| `contacts.phone_normalized GENERATED (regexp_replace(phone,'\D','','g'))` | `TEXT NOT NULL CHECK (digits only)`, **no default** | The data layer derives it from `phone` on every insert / upsert / update (`COMPUTED` in `src/lib/db/engine.ts`), like the generated column did. Raw SQL (seed, import scripts) must set it itself. |
 | `ai_knowledge_chunks.fts tsvector` + GIN | `ai_knowledge_chunks_fts` FTS5 table, synced by triggers | Query: `WHERE ai_knowledge_chunks_fts MATCH ? AND account_id = ? ORDER BY bm25(ai_knowledge_chunks_fts)` |
 | `ai_knowledge_chunks.embedding vector(1536)` + HNSW | removed; `embedded_at TEXT` added | Vectors go to **Vectorize** keyed by chunk id (phase 3/AI). VERIFY: Vectorize has no full local emulation, so local dev falls back to FTS-only retrieval, which the app already supports. |
 | `auth.users(id)` FKs | `users(id)` | Better Auth maps its user model onto `users` (phase 2). |

@@ -15,6 +15,11 @@ vi.mock('./broadcast-resume', () => ({
   planBroadcastResume: (...a: unknown[]) => plan(...a),
 }));
 
+const queueSend = vi.fn();
+vi.mock('@/lib/cf-env', () => ({
+  getEnv: async () => ({ BROADCAST_QUEUE: { send: (...a: unknown[]) => queueSend(...a) } }),
+}));
+
 vi.mock('./broadcast-core', async (orig) => ({
   ...(await orig<typeof import('./broadcast-core')>()),
   deliverBroadcast: (...a: unknown[]) => deliver(...a),
@@ -22,13 +27,12 @@ vi.mock('./broadcast-core', async (orig) => ({
 }));
 
 import {
+  enqueueBroadcastPass,
   isQueueActive,
   QUEUE_ACTIVE_WINDOW_MS,
   QUEUE_CONCURRENCY,
   QUEUE_PASS_SIZE,
-  queueBaseUrl,
   runBroadcastPass,
-  verifyQStashSignature,
 } from './broadcast-queue';
 
 interface DbFixture {
@@ -143,45 +147,24 @@ describe('runBroadcastPass', () => {
   });
 });
 
-describe('verifyQStashSignature', () => {
-  it('fails closed without signing keys or a signature', async () => {
-    const req = new Request('https://x.test/api/queue/broadcast', {
-      method: 'POST',
-      headers: { 'upstash-signature': 'abc' },
-    });
-    expect(await verifyQStashSignature(req, '{}')).toBe(false);
-
-    vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', 'k1');
-    vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', 'k2');
-    const unsigned = new Request('https://x.test/api/queue/broadcast', {
-      method: 'POST',
-    });
-    expect(await verifyQStashSignature(unsigned, '{}')).toBe(false);
+describe('enqueueBroadcastPass (Cloudflare Queues)', () => {
+  it('sends the pass to the BROADCAST_QUEUE binding and stamps the broadcast', async () => {
+    const updates: Record<string, unknown>[] = [];
+    await enqueueBroadcastPass(fakeDb({}, updates), MSG);
+    expect(queueSend).toHaveBeenCalledWith(MSG, undefined);
+    expect(updates[0]).toHaveProperty('delivery_queued_at');
   });
 
-  it('rejects a forged signature', async () => {
-    vi.stubEnv('QSTASH_CURRENT_SIGNING_KEY', 'k1');
-    vi.stubEnv('QSTASH_NEXT_SIGNING_KEY', 'k2');
-    const req = new Request('https://x.test/api/queue/broadcast', {
-      method: 'POST',
-      headers: { 'upstash-signature': 'not-a-jwt' },
-    });
-    expect(await verifyQStashSignature(req, '{}')).toBe(false);
+  it('passes a delay through to the queue (busy back-off)', async () => {
+    await enqueueBroadcastPass(fakeDb({}), MSG, { delaySeconds: 30 });
+    expect(queueSend).toHaveBeenCalledWith(MSG, { delaySeconds: 30 });
   });
-});
 
-describe('queueBaseUrl', () => {
-  it('prefers explicit config, then Vercel, then the request origin', () => {
-    vi.stubEnv('BROADCAST_QUEUE_BASE_URL', '');
-    vi.stubEnv('NEXT_PUBLIC_SITE_URL', '');
-    vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', '');
-    expect(queueBaseUrl('https://req.test/')).toBe('https://req.test');
-
-    vi.stubEnv('VERCEL_PROJECT_PRODUCTION_URL', 'app.vercel.app');
-    expect(queueBaseUrl('https://req.test')).toBe('https://app.vercel.app');
-
-    vi.stubEnv('BROADCAST_QUEUE_BASE_URL', 'https://crm.test/');
-    expect(queueBaseUrl('https://req.test')).toBe('https://crm.test');
+  it('does not stamp the broadcast when the queue rejects the message', async () => {
+    queueSend.mockRejectedValueOnce(new Error('queue unavailable'));
+    const updates: Record<string, unknown>[] = [];
+    await expect(enqueueBroadcastPass(fakeDb({}, updates), MSG)).rejects.toThrow('queue unavailable');
+    expect(updates).toEqual([]);
   });
 });
 

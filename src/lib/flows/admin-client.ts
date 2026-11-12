@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@/lib/db/client-core'
-import { serviceDb } from '@/lib/db/server'
+import { serviceDb } from '@/lib/db/service'
 
 // Lazy, shared service-role client for the Flows engine.
 // Mirrors src/lib/automations/admin-client.ts — same shape so anyone

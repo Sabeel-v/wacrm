@@ -9,7 +9,7 @@ Everything here runs on your machine. No Cloudflare account or paid plan is need
 |---|---|
 | `wrangler.jsonc` | **wacrm-web**: the Next.js app, built by OpenNext into `.open-next/` |
 | `open-next.config.ts` | OpenNext adapter config (no ISR cache needed) |
-| `workers/api/` | **wacrm-api**: Hono worker for the webhook, queue consumers, cron and the realtime Durable Object |
+| `workers/api/` | **wacrm-api**: Hono worker for the webhook, queue consumers, cron and the realtime Durable Object. See [webhook-queues.md](webhook-queues.md) |
 | `workers/api/src/realtime-hub.ts` | `RealtimeHub` Durable Object (WebSocket hibernation) |
 | `d1/migrations/` | D1 schema migrations. Schema details and the Postgres mapping are in [d1-schema.md](d1-schema.md) |
 | `d1/seed/dev.sql` | Local seed data (`npm run db:reset:local`) |

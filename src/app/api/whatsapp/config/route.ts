@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { serviceDb } from '@/lib/db/server'
+import { serviceDb } from '@/lib/db/service'
 import {
   getSubscribedApps,
   listWabaPhoneNumbers,

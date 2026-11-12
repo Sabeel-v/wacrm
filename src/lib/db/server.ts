@@ -91,18 +91,5 @@ export async function createServerDb(requestHeaders?: Headers): Promise<DbClient
   })
 }
 
-/** Admin client: bypasses policies. Never expose to the browser. */
-export function serviceDb(): DbClient {
-  return createDbClient({
-    query: async (ast) => executeQuery(ast, { runner: await runner(), policy: null }),
-    rpc: async ({ fn, args }) => {
-      try {
-        return ok(await executeRpc(fn, args, { runner: await runner(), caller: 'service', ctx: null }))
-      } catch (e) {
-        return errorResult(e)
-      }
-    },
-    auth: serverAuth(async () => null),
-    storage: serverStorage(),
-  })
-}
+/** Admin client (no policies). Lives in ./service.ts so it has no Next.js imports. */
+export { serviceDb } from './service'

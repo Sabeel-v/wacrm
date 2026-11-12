@@ -53,7 +53,7 @@ vi.mock('next/server', () => ({
   },
 }))
 
-vi.mock('@/lib/db/server', () => ({
+vi.mock('@/lib/db/service', () => ({
   serviceDb: () => ({
     from(table: string) {
       switch (table) {
@@ -116,7 +116,8 @@ vi.mock('@/lib/db/server', () => ({
             }),
             update: (patch: Record<string, unknown>) => {
               h.state.recipientUpdates.push(patch)
-              return { eq: () => Promise.resolve({ error: null }) }
+              // update().eq('id').in('status', allowedBefore) — atomic guard
+              return { eq: () => ({ in: () => Promise.resolve({ error: null }) }) }
             },
           }
         case 'contacts':
@@ -197,7 +198,8 @@ vi.mock('@/lib/db/server', () => ({
             // Status webhook mirror (#535): update(...).eq('message_id', ...)
             update: (patch: Record<string, unknown>) => {
               h.state.messageUpdates.push(patch)
-              return { eq: () => Promise.resolve({ error: null }) }
+              // update().eq('message_id').in('status', allowedBefore) — forward-only guard
+              return { eq: () => ({ in: () => Promise.resolve({ error: null }) }) }
             },
             // Idempotent insert: upsert(...).select('id')
             upsert: (row: Record<string, unknown>, options: unknown) => {
@@ -279,7 +281,7 @@ vi.mock('@/lib/webhooks/deliver', () => ({
   dispatchWebhookEvent: h.dispatchWebhookEvent,
 }))
 
-import { POST } from './route'
+import { processWebhook } from '@/lib/whatsapp/webhook-processor'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { findExistingContact } from '@/lib/contacts/dedupe'
 import { handleTemplateWebhookChange } from '@/lib/whatsapp/template-webhook'
@@ -298,7 +300,7 @@ const TEXT_MESSAGE = {
 
 const LEGACY_CONTACTS = [{ wa_id: '15551230000', profile: { name: 'Ada' } }]
 
-function inboundRequest(
+function inboundBody(
   message: Record<string, unknown> = TEXT_MESSAGE,
   contacts: Record<string, unknown>[] = LEGACY_CONTACTS,
 ) {
@@ -318,20 +320,15 @@ function inboundRequest(
       },
     ],
   }
-  return {
-    text: async () => JSON.stringify(body),
-    headers: { get: () => 'sha256=stub' },
-  } as unknown as Request
+  return body
 }
 
+/** What the inbound queue consumer does with one enqueued webhook payload. */
 async function runWebhook(
   message?: Record<string, unknown>,
   contacts?: Record<string, unknown>[],
 ) {
-  const res = await POST(inboundRequest(message, contacts))
-  // Drain the after() callback exactly as the runtime would.
-  for (const cb of h.state.afterCallbacks) await cb()
-  return res
+  await processWebhook(inboundBody(message, contacts))
 }
 
 /** A message-status webhook (sent / delivered / read / failed). */
@@ -351,12 +348,7 @@ async function runStatusWebhook(status: Record<string, unknown>) {
       },
     ],
   }
-  const res = await POST({
-    text: async () => JSON.stringify(body),
-    headers: { get: () => 'sha256=stub' },
-  } as unknown as Request)
-  for (const cb of h.state.afterCallbacks) await cb()
-  return res
+  await processWebhook(body)
 }
 
 beforeEach(() => {
@@ -651,8 +643,10 @@ describe('inbound webhook: inbound media is mirrored (#466)', () => {
   })
 })
 
-describe('inbound webhook: after() awaits automations (#368)', () => {
-  it('every triggered automation settles before the after() callback resolves', async () => {
+describe('inbound webhook: processing awaits automations (#368)', () => {
+  // The queue consumer acks a message only after processWebhook resolves,
+  // so every automation must have finished by then (was: before after() resolved).
+  it('every triggered automation settles before processWebhook resolves', async () => {
     await runWebhook()
 
     // first_inbound_message + new_message_received + keyword_match.
@@ -811,23 +805,22 @@ describe('inbound webhook: business-scoped user IDs (#519)', () => {
   it('drops a delivery that carries neither key rather than inventing a contact', async () => {
     mockFindExistingContact.mockResolvedValue(null)
 
-    const res = await runWebhook(
-      {
-        id: 'wamid.ANON',
-        timestamp: '1700000000',
-        type: 'text',
-        text: { body: 'who am i' },
-      },
-      [{ profile: { name: 'Nobody' } }],
-    )
+    // Resolves (no throw): the queue consumer acks it instead of retrying a
+    // payload we can never process into the dead-letter queue.
+    await expect(
+      runWebhook(
+        {
+          id: 'wamid.ANON',
+          timestamp: '1700000000',
+          type: 'text',
+          text: { body: 'who am i' },
+        },
+        [{ profile: { name: 'Nobody' } }],
+      ),
+    ).resolves.toBeUndefined()
 
     expect(h.state.contactInserts).toHaveLength(0)
     expect(h.state.upsertCalls).toHaveLength(0)
-    // Still a 200 — Meta must not be told to retry a payload we can
-    // never process.
-    expect(
-      (res as unknown as { init?: { status?: number } }).init?.status,
-    ).toBe(200)
   })
 
   it('leaves the legacy phone-only payload behaving exactly as before', async () => {
@@ -891,13 +884,7 @@ describe('template-lifecycle webhooks: WABA id is threaded to the handler (#534)
         },
       ],
     }
-    const req = {
-      text: async () => JSON.stringify(body),
-      headers: { get: () => 'sha256=stub' },
-    } as unknown as Request
-
-    await POST(req)
-    for (const cb of h.state.afterCallbacks) await cb()
+    await processWebhook(body)
 
     const mockHandle = vi.mocked(handleTemplateWebhookChange)
     expect(mockHandle).toHaveBeenCalledTimes(1)

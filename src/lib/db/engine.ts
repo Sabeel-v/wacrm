@@ -78,6 +78,29 @@ export const MAX_BOUND_PARAMS = 100
 
 const NOW_SQL = `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
 
+// ── Computed columns (Postgres GENERATED ALWAYS AS … STORED) ───────────
+// SQLite can't run these expressions (no regexp), so the engine derives
+// them on every insert / upsert / update that writes the source column,
+// for every caller (browser, server routes, webhook consumer, imports).
+interface ComputedColumn {
+  source: string
+  compute: (sourceValue: unknown) => unknown
+}
+
+const COMPUTED: Record<string, Record<string, ComputedColumn>> = {
+  contacts: {
+    // 022: GENERATED ALWAYS AS (regexp_replace(phone, '\D', '', 'g')) STORED
+    phone_normalized: { source: 'phone', compute: (v) => String(v ?? '').replace(/\D/g, '') },
+  },
+}
+
+/** Fill computed columns from their source column, if it is being written. */
+function applyComputed(table: string, row: Row): void {
+  for (const [col, def] of Object.entries(COMPUTED[table] ?? {})) {
+    if (def.source in row) row[col] = def.compute(row[def.source])
+  }
+}
+
 /** Quote an identifier (escaping embedded quotes). Names are also schema-validated. */
 const q = (ident: string) => `"${ident.replace(/"/g, '""')}"`
 
@@ -514,6 +537,7 @@ function prepareRow(table: string, row: Row, policy: Policy | null): Row {
     const { dbCol } = resolveColumn(table, k)
     out[dbCol] = toDb(table, k, v)
   }
+  applyComputed(table, out)
   if ('id' in meta.columns && (out.id === undefined || out.id === null)) out.id = crypto.randomUUID()
   policy?.checkInsertRow(table, out)
   return out
@@ -630,6 +654,7 @@ async function prepareSet(table: string, values: Row, engine: EngineOptions): Pr
     const { dbCol } = resolveColumn(table, k)
     set[dbCol] = toDb(table, k, v)
   }
+  applyComputed(table, set)
   if (engine.policy) await engine.policy.checkUpdate(table, set, engine.runner)
   return set
 }

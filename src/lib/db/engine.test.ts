@@ -193,6 +193,39 @@ describe.skipIf(!hasSqlite)('D1 query engine (service role, no policy)', () => {
       expect(del.data).toHaveLength(1)
     })
 
+    it('derives contacts.phone_normalized from phone (was a Postgres generated column)', async () => {
+      // Insert without phone_normalized: the engine computes it (digits only).
+      const ins = await from('contacts')
+        .insert({ account_id: SEED.account, user_id: SEED.owner, phone: '+1 (555) 010-DIAL 7' })
+        .select('phone_normalized')
+        .single()
+      expect(ins.error).toBeNull()
+      expect(ins.data.phone_normalized).toBe('15550107')
+
+      // A client-supplied value is overridden, like GENERATED ALWAYS.
+      const forced = await from('contacts')
+        .insert({ account_id: SEED.account, user_id: SEED.owner, phone: '+44 20 7946 0000', phone_normalized: 'bogus' })
+        .select('phone_normalized')
+        .single()
+      expect(forced.data.phone_normalized).toBe('442079460000')
+
+      // Updating phone recomputes it; updating other columns leaves it alone.
+      await from('contacts').update({ phone: '+971 50 999 0000' }).eq('id', SEED.sara)
+      await from('contacts').update({ name: 'Sara' }).eq('id', SEED.sara)
+      expect(all(`SELECT phone_normalized FROM contacts WHERE id = '${SEED.sara}'`)[0].phone_normalized).toBe('971509990000')
+
+      // Dedupe still works through the derived value (23505 the webhook relies on).
+      const dup = await from('contacts').insert({ account_id: SEED.account, user_id: SEED.owner, phone: '971-50-999-0000' })
+      expect(dup.error?.code).toBe('23505')
+
+      // Upserts derive it too.
+      const up = await from('contacts')
+        .upsert({ account_id: SEED.account, user_id: SEED.owner, phone: '+1 555 0199' })
+        .select('phone_normalized')
+        .single()
+      expect(up.data.phone_normalized).toBe('15550199')
+    })
+
     it('writes deals.value as cents', async () => {
       await from('deals').update({ value: 99.99 }).eq('pipeline_id', SEED.pipeline)
       expect(all('SELECT value_cents FROM deals')[0].value_cents).toBe(9999)

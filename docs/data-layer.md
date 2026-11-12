@@ -46,6 +46,7 @@ No session means everything is denied (`anonymousPolicy`), except the `peek_invi
 - **UPDATE/DELETE from a user session must have a filter.**
 - **Unsupported query features fail loudly** (`PGRST100`/`PGRST204`), never silently: e.g. `.or()`/`.order()` on an embedded table.
 - **`updated_at`** is set automatically on every UPDATE and upsert.
+- **`contacts.phone_normalized`** (a Postgres generated column) is derived from `phone` on every write.
 - **Realtime** (`channel().on('postgres_changes')`) is inert until the Durable Object hub (phase 5): pages load data but don't live-update. Refresh to see new messages.
 - **Presence** (`member_presence`, `touch_presence`) is a no-op until phase 5; teammates show offline.
 - **Knowledge base:** semantic (vector) search returns nothing until Vectorize is wired; retrieval uses full-text search (FTS5), which the app already falls back to.
@@ -76,7 +77,7 @@ No session means everything is denied (`anonymousPolicy`), except the `peek_invi
 ## Not done yet (later phases)
 
 - Realtime Durable Object hub + presence (phase 5)
-- Webhook → Queues, cron jobs (phases 4, 6). The webhook and engines already run on D1 through `serviceDb()`, but still inside `after()`
+- Cron jobs (phase 6). Webhook → Queues is done (phase 4, see [webhook-queues.md](webhook-queues.md))
 - R2 public media served at `/api/storage/...`; Meta needs an absolute HTTPS URL (`NEXT_PUBLIC_SITE_URL`) to fetch outbound media
 - Email provider for password reset / email change (phase 8)
 - Vectorize for semantic knowledge search

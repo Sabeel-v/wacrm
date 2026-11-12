@@ -20,7 +20,9 @@
  * runtimes that don't keep timers alive across requests.
  */
 
-import { NextResponse } from 'next/server';
+// Type-only: this module also runs in the Hono API worker (queue consumers),
+// which must not bundle Next.js. The response is a standard Response.
+import type { NextResponse } from 'next/server';
 
 export interface RateLimitOptions {
   /** Max requests allowed in `windowMs`. */
@@ -95,7 +97,7 @@ export function checkRateLimit(
  */
 export function rateLimitResponse(result: RateLimitResult): NextResponse {
   const retryAfterSec = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
-  return NextResponse.json(
+  return Response.json(
     {
       error: 'Rate limit exceeded',
       retry_after_seconds: retryAfterSec,
@@ -109,7 +111,7 @@ export function rateLimitResponse(result: RateLimitResult): NextResponse {
         'X-RateLimit-Reset': String(Math.ceil(result.reset / 1000)),
       },
     },
-  );
+  ) as NextResponse;
 }
 
 /** Preconfigured budgets, tweak here not at call sites. */

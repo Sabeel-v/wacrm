@@ -14,6 +14,16 @@ import { isBusinessScopedUserId } from './wa-identity'
 const META_API_VERSION = 'v21.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
 
+/**
+ * Meta Graph responses are loosely typed JSON. Reading them as `any` keeps
+ * this file compiling the same under the browser (DOM) and Workers type
+ * libraries, where `Response.json()` is typed `unknown`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function readJson(response: Response): Promise<any> {
+  return response.json()
+}
+
 export interface MetaSendResult {
   messageId: string
 }
@@ -379,7 +389,7 @@ export async function sendTextMessage(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   return { messageId: data.messages[0].id }
 }
 
@@ -444,7 +454,7 @@ export async function sendMediaMessage(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   return { messageId: data.messages[0].id }
 }
 
@@ -561,7 +571,7 @@ export async function sendTemplateMessage(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   return { messageId: data.messages[0].id }
 }
 
@@ -689,7 +699,7 @@ export async function submitMessageTemplate(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   if (!data?.id) {
     throw new Error('Meta accepted the template but returned no id.')
   }
@@ -741,7 +751,7 @@ export async function editMessageTemplate(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json().catch(() => ({}))
+  const data = await readJson(response).catch(() => ({}))
   return { success: data?.success !== false }
 }
 
@@ -820,7 +830,7 @@ export async function sendReactionMessage(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   return { messageId: data.messages[0].id }
 }
 
@@ -998,7 +1008,7 @@ export async function sendInteractiveButtons(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   return { messageId: data.messages[0].id }
 }
 
@@ -1129,7 +1139,7 @@ export async function sendInteractiveList(
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   return { messageId: data.messages[0].id }
 }
 
@@ -1187,7 +1197,7 @@ export async function getMediaUrl(
   if (!response.ok) {
     await throwMetaError(response, `Media fetch failed: ${response.status}`)
   }
-  const data = await response.json()
+  const data = await readJson(response)
   if (!data.url) throw new Error('Media URL not found in Meta response')
   // Meta documents file_size as a number but has been observed sending
   // it as a numeric string; Number() handles both and NaN-guards junk.

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { serviceDb } from '@/lib/db/server';
+import { serviceDb } from '@/lib/db/service';
 import { recordBroadcastUrlClick } from '@/lib/whatsapp/broadcast-button-tracking';
 
 // Lazy-initialized admin client for public redirect route

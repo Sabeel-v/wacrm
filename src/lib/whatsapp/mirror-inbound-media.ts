@@ -1,6 +1,6 @@
 import { downloadMedia } from "./meta-api";
 import { extensionForMime } from "@/lib/media/filename";
-import { buildMediaPath, MEDIA_MAX_BYTES } from "@/lib/storage/upload-media";
+import { buildMediaPath, MEDIA_MAX_BYTES } from "@/lib/storage/media-path";
 
 /**
  * Copies inbound WhatsApp media into the `chat-media` bucket so it
