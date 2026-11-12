@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeChannel } from '@/lib/db/client-core';
 
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -120,7 +120,9 @@ export function usePresence(enabled = true): UsePresenceResult {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          console.error("[usePresence] initial fetch error:", error.message);
+          // member_presence moves to the realtime Durable Object (migration phase 5);
+          // until then the table does not exist in D1 and presence shows offline.
+          if (error.code !== "PGRST205") console.error("[usePresence] initial fetch error:", error.message);
           return;
         }
         setRows((prev) => {

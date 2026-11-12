@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET } from './route';
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(),
+vi.mock('@/lib/db/server', () => ({
+  serviceDb: vi.fn(),
 }));
 
 vi.mock('@/lib/whatsapp/broadcast-button-tracking', () => ({

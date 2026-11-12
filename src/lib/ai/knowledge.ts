@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@/lib/db/client-core'
 import type { AiConfig } from './types'
 import { chunkText } from './chunk'
 import { embedTexts, toVectorLiteral } from './embeddings'
@@ -63,7 +63,9 @@ export async function ingestDocument(
     account_id: accountId,
     chunk_index: i,
     content,
-    embedding: embeddings ? toVectorLiteral(embeddings[i]) : null,
+    // D1 has no vector column: vectors go to Cloudflare Vectorize (not wired yet),
+    // so retrieval uses the FTS5 index. embedded_at stays NULL until then.
+    embedded_at: null,
   }))
 
   const { error: insErr } = await db.from('ai_knowledge_chunks').insert(rows)

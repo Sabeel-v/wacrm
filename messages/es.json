@@ -2108,5 +2108,21 @@
   },
   "DashboardShell": {
     "loading": "Cargando..."
+  },
+  "ResetPasswordPage": {
+    "title": "Crea una nueva contraseña",
+    "desc": "Elige una nueva contraseña para tu cuenta.",
+    "newPasswordLabel": "Nueva contraseña",
+    "confirmLabel": "Confirma la nueva contraseña",
+    "submit": "Actualizar contraseña",
+    "saving": "Actualizando...",
+    "mismatch": "Las contraseñas no coinciden.",
+    "tooShort": "La contraseña debe tener al menos {min} caracteres.",
+    "invalidLink": "Este enlace de restablecimiento no es válido o ha caducado.",
+    "requestNew": "Solicitar un nuevo enlace",
+    "successTitle": "Contraseña actualizada",
+    "successDesc": "Ya puedes iniciar sesión con tu nueva contraseña.",
+    "goToSignIn": "Ir a iniciar sesión",
+    "backToSignIn": "Volver a iniciar sesión"
   }
 }

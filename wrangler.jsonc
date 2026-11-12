@@ -1,0 +1,45 @@
+// Web worker: the Next.js app (UI, SSR, short CRUD) built by OpenNext.
+// Long-running / async work lives in the API worker (workers/api).
+//
+// IDs below are placeholders for LOCAL development only. Wrangler's
+// local mode accepts any database_id and never contacts Cloudflare.
+// Replace them with real IDs when you create the resources at deploy
+// time (phase 8). Both workers use the SAME database_id so they share
+// one local SQLite file under .wrangler/state.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wacrm-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-10",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // OpenNext self-reference (required by its runtime helpers).
+    { "binding": "WORKER_SELF_REFERENCE", "service": "wacrm-web" },
+    // Hono API worker (webhook, queues, cron, realtime).
+    { "binding": "API", "service": "wacrm-api" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wacrm-db",
+      "database_id": "00000000-0000-0000-0000-00000000d1db",
+      "migrations_dir": "d1/migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "wacrm-media" }],
+  "queues": {
+    "producers": [{ "binding": "BROADCAST_QUEUE", "queue": "wacrm-broadcast" }]
+  },
+  "durable_objects": {
+    "bindings": [
+      // Class is defined and migrated in the API worker.
+      { "name": "REALTIME", "class_name": "RealtimeHub", "script_name": "wacrm-api" }
+    ]
+  },
+  "vars": { "ENVIRONMENT": "development" },
+  "observability": { "enabled": true }
+}

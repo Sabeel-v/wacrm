@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@/lib/db/client-core'
 
 const h = vi.hoisted(() => ({ embedTexts: vi.fn() }))
 vi.mock('./embeddings', () => ({
@@ -128,7 +128,9 @@ describe('ingestDocument', () => {
     expect(h.embedTexts).toHaveBeenCalledTimes(1)
     expect(state.deletedFor).toBe('doc-1')
     expect(state.inserted).toHaveLength(1)
-    expect(state.inserted![0].embedding).toBe('[0,0]') // literal from mocked embed
+    // D1: vectors go to Vectorize (not wired yet), so chunks carry no vector column.
+    expect(state.inserted![0]).not.toHaveProperty('embedding')
+    expect(state.inserted![0].embedded_at).toBeNull()
     expect(state.inserted![0].account_id).toBe('acct')
   })
 
@@ -136,7 +138,7 @@ describe('ingestDocument', () => {
     const { db, state } = makeDb()
     await ingestDocument(db, 'acct', { embeddingsApiKey: null }, 'doc-1', 'hello world')
     expect(h.embedTexts).not.toHaveBeenCalled()
-    expect(state.inserted![0].embedding).toBeNull()
+    expect(state.inserted![0].embedded_at).toBeNull()
   })
 
   it('deletes existing chunks and inserts nothing for empty content', async () => {
@@ -155,6 +157,6 @@ describe('ingestDocument', () => {
     ).rejects.toThrow('rate limited')
     // Chunks were inserted (lexical search works) despite the embed failure…
     expect(state.inserted).toHaveLength(1)
-    expect(state.inserted![0].embedding).toBeNull()
+    expect(state.inserted![0].embedded_at).toBeNull()
   })
 })

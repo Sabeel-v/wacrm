@@ -30,7 +30,8 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      // Better Auth emails a link that lands on /reset-password?token=…
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
     if (error) {

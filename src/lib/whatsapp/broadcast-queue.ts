@@ -21,7 +21,7 @@
 // QStash message only picks up what is genuinely still outstanding.
 // ============================================================
 
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@/lib/db/client-core';
 import { Client, Receiver } from '@upstash/qstash';
 
 import {

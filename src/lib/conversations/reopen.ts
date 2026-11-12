@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@/lib/db/client-core'
 
 /**
  * Re-open a closed conversation because the customer wrote again

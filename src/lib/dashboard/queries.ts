@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@/lib/db/client-core'
 import {
   daysAgoStart,
   DOW_SHORT_MON_FIRST,

@@ -1,4 +1,4 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@/lib/db/client-core';
 
 export interface NodeLeadItem {
   contact_id: string;

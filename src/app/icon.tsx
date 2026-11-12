@@ -29,8 +29,8 @@ export default function Icon() {
       >
         <img
           src={LOGO_DATA_URI}
-          width="32"
-          height="32"
+          width={32}
+          height={32}
         />
       </div>
     ),

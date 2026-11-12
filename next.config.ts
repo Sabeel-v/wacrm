@@ -67,7 +67,13 @@ const nextConfig: NextConfig = {
   // Emit a self-contained server bundle (.next/standalone) so the
   // Docker image can run without node_modules or the Next CLI.
   // Harmless outside Docker: `next start` keeps working as before.
+  // OpenNext (Cloudflare) also builds from this standalone output.
   output: "standalone",
+
+  // The only next/image use is a static local logo (sidebar.tsx).
+  // Workers can't run sharp, so skip the optimizer instead of wiring
+  // up the Cloudflare Images binding for one 32px icon.
+  images: { unoptimized: true },
 
   /**
    * Cross-origin dev access (Next.js 16).
@@ -162,3 +168,12 @@ const nextConfig: NextConfig = {
 };
 
 export default withNextIntl(nextConfig);
+
+// Expose Cloudflare bindings (D1, R2, Queues, DO) to `next dev` via
+// getCloudflareContext(), backed by Wrangler's local simulators.
+// No-op for `next build`.
+if (process.env.NODE_ENV === "development") {
+  void import("@opennextjs/cloudflare").then((m) =>
+    m.initOpenNextCloudflareForDev(),
+  );
+}

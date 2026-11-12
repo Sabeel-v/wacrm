@@ -34,7 +34,9 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          # 22: Wrangler/Miniflare need >=22.12, and the D1 schema tests
+          # (d1/schema.test.ts) use the built-in node:sqlite.
+          node-version: 22
           cache: npm
 
       - name: Install dependencies

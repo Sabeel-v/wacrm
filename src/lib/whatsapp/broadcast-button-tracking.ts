@@ -11,7 +11,7 @@
 //   3. Never throws; completely decoupled from standard webhook processing.
 // ============================================================
 
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@/lib/db/client-core';
 import type { MessageTemplate, TemplateButton } from '@/types';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import { extractVariableIndices } from './template-validators';

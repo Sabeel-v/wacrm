@@ -1,95 +1,73 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getCookieCache, getSessionCookie } from 'better-auth/cookies'
+
+/**
+ * Route guard (Better Auth). Runs on the edge, so it never touches D1:
+ *
+ *   - Protected pages: no session cookie → /login. Optimistic only; every
+ *     data request is still authorised server-side (/api/db, routes).
+ *   - Auth pages (/login, /signup, /forgot-password): redirect away only
+ *     when the *signed, unexpired* session cache verifies. The client's
+ *     session check reads the same cache, so the two can't disagree and
+ *     bounce the user between /login and /dashboard.
+ *   - /api/whatsapp/* (except the Meta webhook): 401 without a session.
+ */
+
+const AUTH_PAGES = ['/login', '/signup', '/forgot-password']
+
+// Includes /agents, /flows, /quick-replies, /notifications, which the
+// Supabase-era list left out (MIGRATION_ASSESSMENT.md §10.4 #8).
+const PROTECTED_PATHS = [
+  '/dashboard', '/inbox', '/contacts', '/pipelines', '/pipeline', '/leads', '/reports',
+  '/broadcasts', '/templates', '/automations', '/flows', '/agents', '/quick-replies',
+  '/notifications', '/settings',
+]
+
+const isProtected = (path: string) => PROTECTED_PATHS.some((p) => path === p || path.startsWith(`${p}/`))
+
+async function hasVerifiedSession(request: NextRequest): Promise<boolean> {
+  const secret = process.env.BETTER_AUTH_SECRET
+  if (!secret) return false
+  try {
+    // Better Auth issues `__Secure-`-prefixed cookie names in production
+    // builds (even on a local http preview) and plain names in dev, so
+    // accept either; the value is still signature- and expiry-checked.
+    for (const isSecure of [true, false]) {
+      if (await getCookieCache(request, { secret, isSecure })) return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  const path = request.nextUrl.pathname
+  const hasSessionCookie = !!getSessionCookie(request)
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // getUser() transparently refreshes an expired access token, which
-  // ROTATES the refresh token and writes the new cookies onto
-  // `supabaseResponse` via setAll() above. Any response we return in
-  // place of `supabaseResponse` (every redirect / JSON branch below)
-  // is a fresh object that does NOT carry those Set-Cookie headers, so
-  // the rotated token never reaches the browser. The next request then
-  // replays the old, now-consumed refresh token, the refresh fails, and
-  // the session wedges — the user gets a broken reload after idling and
-  // can only recover by manually clearing cookies (issue #288). Copy the
-  // refreshed cookies onto whatever response we hand back to fix that.
-  const withRefreshedCookies = <T extends NextResponse>(response: T): T => {
-    supabaseResponse.cookies.getAll().forEach((cookie) => {
-      response.cookies.set(cookie)
-    })
-    return response
-  }
-
-  // Auth pages - redirect to dashboard if already logged in.
-  // Exception: when an invite token is in the query string we
-  // send the already-signed-in user to /join/<token> instead so
-  // they can accept the invitation in one click. Without this,
-  // a forwarded invite link to someone who's already signed in
-  // would silently drop them on /dashboard.
-  if (user && (
-    request.nextUrl.pathname === '/login' ||
-    request.nextUrl.pathname === '/signup' ||
-    request.nextUrl.pathname === '/forgot-password'
-  )) {
+  if (AUTH_PAGES.includes(path) && hasSessionCookie && (await hasVerifiedSession(request))) {
     const url = request.nextUrl.clone()
+    // Signed-in user following an invite link: go straight to accepting it.
     const inviteToken = request.nextUrl.searchParams.get('invite')
-    if (
-      inviteToken &&
-      (request.nextUrl.pathname === '/login' ||
-        request.nextUrl.pathname === '/signup')
-    ) {
-      url.pathname = `/join/${encodeURIComponent(inviteToken)}`
-      url.search = ''
-    } else {
-      url.pathname = '/dashboard'
-      url.search = ''
-    }
-    return withRefreshedCookies(NextResponse.redirect(url))
+    url.pathname = inviteToken && path !== '/forgot-password' ? `/join/${encodeURIComponent(inviteToken)}` : '/dashboard'
+    url.search = ''
+    return NextResponse.redirect(url)
   }
 
-  // Protected pages - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/pipeline', '/leads', '/reports', '/broadcasts', '/templates', '/automations', '/settings']
-  if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
+  if (!hasSessionCookie && isProtected(path)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return withRefreshedCookies(NextResponse.redirect(url))
+    url.search = ''
+    return NextResponse.redirect(url)
   }
 
-  // API routes that need auth (not webhooks)
-  if (!user && request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
-      !request.nextUrl.pathname.includes('/webhook')) {
-    return withRefreshedCookies(
-      NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    )
+  if (!hasSessionCookie && path.startsWith('/api/whatsapp/') && !path.includes('/webhook')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  return supabaseResponse
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

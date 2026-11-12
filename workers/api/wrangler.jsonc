@@ -1,0 +1,53 @@
+// API worker (Hono): Meta webhook ingress, Queue consumers, Cron
+// Triggers and the realtime Durable Object.
+//
+// Placeholder IDs are for LOCAL development only (see ../../wrangler.jsonc).
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "wacrm-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wacrm-db",
+      "database_id": "00000000-0000-0000-0000-00000000d1db",
+      "migrations_dir": "../../d1/migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "wacrm-media" }],
+  "queues": {
+    "producers": [
+      { "binding": "INBOUND_QUEUE", "queue": "wacrm-inbound" },
+      { "binding": "BROADCAST_QUEUE", "queue": "wacrm-broadcast" }
+    ],
+    "consumers": [
+      {
+        // Meta webhook payloads (messages + statuses).
+        "queue": "wacrm-inbound",
+        "max_batch_size": 10,
+        "max_batch_timeout": 2,
+        "max_retries": 5,
+        "dead_letter_queue": "wacrm-inbound-dlq"
+      },
+      {
+        // One broadcast delivery pass per message.
+        "queue": "wacrm-broadcast",
+        "max_batch_size": 1,
+        "max_retries": 5,
+        "dead_letter_queue": "wacrm-broadcast-dlq"
+      }
+    ]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "REALTIME", "class_name": "RealtimeHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RealtimeHub"] }],
+  "triggers": {
+    // Every minute: resume due automation waits, sweep stale flow runs.
+    "crons": ["* * * * *"]
+  },
+  "vars": { "ENVIRONMENT": "development" },
+  "observability": { "enabled": true }
+}

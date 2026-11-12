@@ -2108,5 +2108,21 @@
   },
   "DashboardShell": {
     "loading": "Carregando..."
+  },
+  "ResetPasswordPage": {
+    "title": "Defina uma nova senha",
+    "desc": "Escolha uma nova senha para a sua conta.",
+    "newPasswordLabel": "Nova senha",
+    "confirmLabel": "Confirme a nova senha",
+    "submit": "Atualizar senha",
+    "saving": "Atualizando...",
+    "mismatch": "As senhas não coincidem.",
+    "tooShort": "A senha deve ter pelo menos {min} caracteres.",
+    "invalidLink": "Este link de redefinição é inválido ou expirou.",
+    "requestNew": "Solicitar um novo link",
+    "successTitle": "Senha atualizada",
+    "successDesc": "Agora você pode entrar com a sua nova senha.",
+    "goToSignIn": "Ir para o login",
+    "backToSignIn": "Voltar para o login"
   }
 }
