@@ -43,7 +43,7 @@ Broadcast "Send" ──▶ /api/whatsapp/broadcast/[id]/queue ──▶ queue "w
 ```bash
 npm run preview
 ```
-Builds, copies the API worker's secrets (`ENCRYPTION_KEY`, `META_APP_SECRET`, `META_APP_ID`) from `.env.local` into `workers/api/.dev.vars` (git-ignored), and starts both workers on http://127.0.0.1:8787. The terminal shows each queue batch, e.g. `QUEUE wacrm-inbound 1/1 (55ms)`.
+Builds, copies the API worker's secrets (`ENCRYPTION_KEY`, `META_APP_SECRET`, `META_APP_ID`, `BETTER_AUTH_SECRET`) from `.env.local` into `workers/api/.dev.vars` (git-ignored), and starts both workers on http://127.0.0.1:8787. The terminal shows each queue batch, e.g. `QUEUE wacrm-inbound 1/1 (55ms)`.
 
 ## Test with real WhatsApp messages (tunnel)
 
@@ -63,17 +63,17 @@ Meta must reach your PC over HTTPS.
    - **Verify token:** the one from step 3, then click *Verify and save* (this hits the GET check)
    - Subscribe to the **messages** webhook field (plus `message_template_status_update` if you use templates)
 5. `META_APP_SECRET` in `.env.local` must be your Meta app's **App Secret**, or every POST is rejected with 401 (you'll see `rejected request with invalid signature` in the terminal).
-6. Send a WhatsApp message to your business number. It appears in the inbox; refresh the page, since live updates arrive in phase 5.
+6. Send a WhatsApp message to your business number. It appears in the inbox live (see [realtime.md](realtime.md)).
 7. Send a small broadcast (a few contacts) and watch `QUEUE wacrm-broadcast` lines and the recipient statuses update.
 
 The quick-tunnel URL changes every time it restarts, so update the Callback URL in Meta when it does.
 
 ## Production notes (phase 8)
 
-- Set the API worker's secrets: `npx wrangler secret put META_APP_SECRET -c workers/api/wrangler.jsonc`, and the same for `ENCRYPTION_KEY` and `META_APP_ID`. Use the **same** `ENCRYPTION_KEY` as the web worker.
+- Set the API worker's secrets: `npx wrangler secret put META_APP_SECRET -c workers/api/wrangler.jsonc`, and the same for `ENCRYPTION_KEY`, `META_APP_ID` and `BETTER_AUTH_SECRET`. Use the **same** `ENCRYPTION_KEY` and `BETTER_AUTH_SECRET` as the web worker.
 - Optional: add a Worker **route** `your-domain/api/whatsapp/webhook*` → `wacrm-api`, so Meta reaches the API worker directly and skips the forwarding hop. The URL in Meta stays the same.
 - Dead-letter queues (`wacrm-inbound-dlq`, `wacrm-broadcast-dlq`) have no consumer: failed messages wait there for inspection or replay. Watch their depth in the Cloudflare dashboard.
-- QStash is no longer used: `QSTASH_TOKEN`, `QSTASH_*_SIGNING_KEY` and `BROADCAST_QUEUE_BASE_URL` can be removed. `@upstash/qstash` can be uninstalled once you're confident.
+- QStash is gone: the `@upstash/qstash` package and its env variables were removed.
 - Limits to VERIFY against current Cloudflare docs: queue message size (payloads over 100 KB are split per change), consumer wall time, subrequests per invocation (why passes are 100 recipients), max retries/delay.
 
 ## Fixed along the way

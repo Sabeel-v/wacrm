@@ -18,6 +18,7 @@ import {
 } from './client-core'
 import { executeQuery, errorResult } from './engine'
 import { anonymousPolicy, createPolicy } from './policy'
+import { createRealtimeSink } from './realtime'
 import { executeRpc } from './rpc'
 import { d1Runner, type D1Like } from './runners'
 import { serverStorage } from './storage-server'
@@ -74,14 +75,18 @@ export async function createServerDb(requestHeaders?: Headers): Promise<DbClient
   }
 
   return createDbClient({
-    query: async (ast) => executeQuery(ast, { runner: await runner(), policy: await policyFor() }),
+    query: async (ast) => {
+      const r = await runner()
+      return executeQuery(ast, { runner: r, realtime: createRealtimeSink(r), policy: await policyFor() })
+    },
     rpc: async ({ fn, args }) => {
       try {
+        const r2 = await runner()
         const s = await getCtx()
         const ctx = s?.accountId && s.role
           ? { userId: s.userId, accountId: s.accountId, role: s.role, origin: 'server' as const }
           : null
-        return ok(await executeRpc(fn, args, { runner: await runner(), caller: ctx ? 'user' : 'anon', ctx }))
+        return ok(await executeRpc(fn, args, { runner: r2, realtime: createRealtimeSink(r2), caller: ctx ? 'user' : 'anon', ctx }))
       } catch (e) {
         return errorResult(e)
       }

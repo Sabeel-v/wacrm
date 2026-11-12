@@ -21,20 +21,68 @@ async function resolve(params: Params['params']) {
   return { bucket, rule, key }
 }
 
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const { bucket, rule, key } = await resolve(params)
   if (!rule || !key) return json({ error: 'Not found' }, 404)
   const env = await getEnv()
-  const obj = await env.MEDIA.get(`${bucket}/${key}`)
+  const objectKey = `${bucket}/${key}`
+
+  // Range requests: browsers need them to seek in audio/video (Safari
+  // refuses to play video without them).
+  const range = parseRange(request.headers.get('range'))
+  if (range === 'invalid') return new Response(null, { status: 416 })
+
+  let obj
+  try {
+    obj = await env.MEDIA.get(objectKey, range ? { range } : undefined)
+  } catch (err) {
+    // R2 throws when the range starts past the end of the object.
+    if (range && /range/i.test((err as Error).message)) return new Response(null, { status: 416 })
+    throw err
+  }
   if (!obj) return json({ error: 'Not found' }, 404)
+
   const headers = new Headers()
   obj.writeHttpMetadata(headers as unknown as Parameters<typeof obj.writeHttpMetadata>[0])
   headers.set('ETag', obj.httpEtag)
+  headers.set('Accept-Ranges', 'bytes')
   headers.set('Cache-Control', headers.get('Cache-Control') || 'public, max-age=31536000, immutable')
   headers.set('X-Content-Type-Options', 'nosniff')
   // Never let uploaded HTML/SVG run as a page on our origin.
   headers.set('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox")
+
+  // Revalidation: unchanged object → 304, no body.
+  if (!range && request.headers.get('if-none-match') === obj.httpEtag) {
+    return new Response(null, { status: 304, headers })
+  }
+
+  if (range) {
+    const r = obj.range as { offset?: number; length?: number } | undefined
+    const offset = r?.offset ?? 0
+    const length = r?.length ?? obj.size - offset
+    if (offset >= obj.size) {
+      return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${obj.size}` } })
+    }
+    headers.set('Content-Range', `bytes ${offset}-${offset + length - 1}/${obj.size}`)
+    headers.set('Content-Length', String(length))
+    return new Response(obj.body as unknown as BodyInit, { status: 206, headers })
+  }
+  headers.set('Content-Length', String(obj.size))
   return new Response(obj.body as unknown as BodyInit, { headers })
+}
+
+/** Parse a single-range `Range: bytes=…` header into R2's range option. */
+function parseRange(header: string | null): { offset?: number; length?: number; suffix?: number } | null | 'invalid' {
+  if (!header) return null
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim())
+  if (!m) return null // multi-range or other units: serve the whole object
+  const [, start, end] = m
+  if (start === '' && end === '') return 'invalid'
+  if (start === '') return Number(end) > 0 ? { suffix: Number(end) } : 'invalid'
+  const offset = Number(start)
+  if (end === '') return { offset }
+  if (Number(end) < offset) return 'invalid'
+  return { offset, length: Number(end) - offset + 1 }
 }
 
 async function writer(request: Request) {

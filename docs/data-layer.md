@@ -47,13 +47,12 @@ No session means everything is denied (`anonymousPolicy`), except the `peek_invi
 - **Unsupported query features fail loudly** (`PGRST100`/`PGRST204`), never silently: e.g. `.or()`/`.order()` on an embedded table.
 - **`updated_at`** is set automatically on every UPDATE and upsert.
 - **`contacts.phone_normalized`** (a Postgres generated column) is derived from `phone` on every write.
-- **Realtime** (`channel().on('postgres_changes')`) is inert until the Durable Object hub (phase 5): pages load data but don't live-update. Refresh to see new messages.
-- **Presence** (`member_presence`, `touch_presence`) is a no-op until phase 5; teammates show offline.
+- **Realtime** (`channel().on('postgres_changes')`) and **presence** run on a Durable Object hub. See [realtime.md](realtime.md).
 - **Knowledge base:** semantic (vector) search returns nothing until Vectorize is wired; retrieval uses full-text search (FTS5), which the app already falls back to.
 
 ## Auth
 
-- Email + password via Better Auth. Passwords: scrypt. **Imported Supabase bcrypt hashes** (`$2a$`) are accepted and upgraded to scrypt on the user's next login (tested with the seed viewer).
+- Email + password via Better Auth. Passwords: scrypt.
 - Sessions: `better-auth.session_token` cookie (+ a signed 5-minute `session_data` cache to save D1 reads). The role is read from `profiles` on every request, so role changes apply immediately. A revoked session can stay valid in the cache for up to 5 minutes.
 - Rate limiting: stored in D1 (`auth_rate_limits`), keyed by `CF-Connecting-IP`. Locally all requests share one bucket, so more than 3 sign-ins within 10 seconds get `429`.
 - Password reset: the link is **printed in the terminal** running the preview (no email provider yet, phase 8).
@@ -62,7 +61,7 @@ No session means everything is denied (`anonymousPolicy`), except the `peek_invi
 
 ## Local test accounts
 
-`npm run db:reset:local` loads four users (owner, admin, agent, viewer `@wacrm.test`). The password is in `d1/seed/dev.sql`. The viewer has a Supabase-style bcrypt hash on purpose.
+`npm run db:reset:local` loads four users (owner, admin, agent, viewer `@wacrm.test`). The password is in `d1/seed/dev.sql`.
 
 ## Tests
 
@@ -72,13 +71,12 @@ No session means everything is denied (`anonymousPolicy`), except the `peek_invi
 | `src/lib/db/policy.test.ts` (16) | tenant isolation, role tiers, secrets hidden from the browser, profiles/notifications/accounts rules, scoped upserts |
 | `src/lib/db/rpc.test.ts` (10) | member/ownership/invitation RPCs, contact tag filter, AI reply cap, atomic broadcast creation, FTS search, caller restrictions |
 | `src/middleware.test.ts` (7) | redirects, invite redirect, no login loop, protected paths, API 401 |
-| End-to-end (manual, against `npm run preview`) | 31/31: sign-in for all roles incl. bcrypt, `/api/db` role matrix, cross-origin rejection, sign-up bootstrap, sign-out revocation, page redirects |
+| End-to-end (manual, against `npm run preview`) | 31/31: sign-in for all roles, `/api/db` role matrix, cross-origin rejection, sign-up bootstrap, sign-out revocation, page redirects |
 
 ## Not done yet (later phases)
 
-- Realtime Durable Object hub + presence (phase 5)
-- Cron jobs (phase 6). Webhook → Queues is done (phase 4, see [webhook-queues.md](webhook-queues.md))
-- R2 public media served at `/api/storage/...`; Meta needs an absolute HTTPS URL (`NEXT_PUBLIC_SITE_URL`) to fetch outbound media
+- Done since: webhook → Queues ([webhook-queues.md](webhook-queues.md)), realtime + presence ([realtime.md](realtime.md)), cron jobs and media range requests ([cron-storage.md](cron-storage.md))
+- Meta needs an absolute HTTPS URL (`NEXT_PUBLIC_SITE_URL`) to fetch outbound media from `/api/storage/...`
 - Email provider for password reset / email change (phase 8)
 - Vectorize for semantic knowledge search
-- `@supabase/supabase-js` and `@supabase/ssr` are no longer imported by app code; remove them from `package.json` once you're confident
+- The modules under `src/lib/supabase/` are thin re-exports of the D1 clients, kept so the ~460 existing imports stay unchanged. No Supabase package is installed.

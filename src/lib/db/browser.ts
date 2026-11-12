@@ -5,7 +5,7 @@
  *   from()/rpc()  → POST /api/db (session + RLS port on the server)
  *   auth          → Better Auth (/api/auth/*)
  *   storage       → /api/storage/<bucket>/<path> (R2)
- *   channel()     → inert until the Durable Object hub lands (phase 5)
+ *   channel()     → shared WebSocket to the RealtimeHub Durable Object (realtime-client.ts)
  */
 import { createAuthClient } from 'better-auth/client'
 import {
@@ -17,6 +17,7 @@ import {
   type DbClient,
   type StorageApi,
 } from './client-core'
+import { realtimeChannel } from './realtime-client'
 import { errorResult } from './engine-errors'
 import { publicUrl } from './storage-rules'
 import type { DbResult } from './types'
@@ -169,6 +170,7 @@ export function createBrowserDb(): DbClient {
     rpc: (call) => post({ type: 'rpc', fn: call.fn, args: call.args }),
     auth,
     storage,
+    channel: realtimeChannel,
   })
   return client
 }

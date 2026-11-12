@@ -120,8 +120,8 @@ export function usePresence(enabled = true): UsePresenceResult {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          // member_presence moves to the realtime Durable Object (migration phase 5);
-          // until then the table does not exist in D1 and presence shows offline.
+          // member_presence lives in the realtime Durable Object (docs/realtime.md);
+          // presence comes from the realtime hub, so this table lookup finds nothing in D1.
           if (error.code !== "PGRST205") console.error("[usePresence] initial fetch error:", error.message);
           return;
         }

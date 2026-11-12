@@ -1,6 +1,6 @@
 # D1 schema (migration phase 1)
 
-The D1 schema is a **baseline migration**, [`d1/migrations/0001_baseline.sql`](../d1/migrations/0001_baseline.sql), plus [`0002_auth.sql`](../d1/migrations/0002_auth.sql) for Better Auth's tables (`auth_sessions`, `auth_accounts`, `auth_verifications`, `auth_rate_limits`; see [data-layer.md](data-layer.md)). It recreates the **final** state of Supabase migrations `001`–`046` directly; it does not replay them. Future schema changes are new numbered files in `d1/migrations/` (`npm run db:new -- <name>`).
+The D1 schema is a **baseline migration**, [`d1/migrations/0001_baseline.sql`](../d1/migrations/0001_baseline.sql), plus [`0002_auth.sql`](../d1/migrations/0002_auth.sql) for Better Auth's tables (`auth_sessions`, `auth_accounts`, `auth_verifications`, `auth_rate_limits`; see [data-layer.md](data-layer.md)). It recreates the **final** state of the original Supabase migrations `001`–`046` (removed from the repo; see git history) directly; it does not replay them. Future schema changes are new numbered files in `d1/migrations/` (`npm run db:new -- <name>`).
 
 | Item | Postgres (after 046) | D1 baseline |
 |---|---|---|
@@ -37,13 +37,13 @@ npx vitest run d1
 ```
 Schema behaviour tests (26), on in-memory SQLite via `node:sqlite`.
 
-The seed creates one account, **Demo Business**, with four users: `owner@`, `admin@`, `agent@` and `viewer@wacrm.test`. It also adds 3 contacts, 2 conversations, a template, a pipeline with a deal, a broadcast with mixed recipient statuses, an automation, a flow, a notification and a knowledge-base document. There are no passwords yet (phase 2) and no WhatsApp config (tokens must be real `ENCRYPTION_KEY` ciphertext).
+The seed creates one account, **Demo Business**, with four users: `owner@`, `admin@`, `agent@` and `viewer@wacrm.test`. It also adds 3 contacts, 2 conversations, a template, a pipeline with a deal, a broadcast with mixed recipient statuses, an automation, a flow, a notification and a knowledge-base document. The login password is in the seed file. There is no WhatsApp config (tokens must be real `ENCRYPTION_KEY` ciphertext).
 
 ## Type mapping
 
 | Postgres | D1 | Rule for application code |
 |---|---|---|
-| `UUID` + `uuid_generate_v4()` | `TEXT PRIMARY KEY NOT NULL DEFAULT (<v4 expression>)` | Omit `id` on insert and use `RETURNING id`, or pass `crypto.randomUUID()`. Imported rows keep Postgres ids. |
+| `UUID` + `uuid_generate_v4()` | `TEXT PRIMARY KEY NOT NULL DEFAULT (<v4 expression>)` | Omit `id` on insert and use `RETURNING id`, or pass `crypto.randomUUID()`. |
 | `TIMESTAMPTZ DEFAULT NOW()` | `TEXT` ISO-8601 UTC ms (`2026-11-12T06:48:11.163Z`) | Always write `new Date().toISOString()`. Never write local time or `+00:00`; values must sort lexically. |
 | `BOOLEAN` | `INTEGER` 0/1 + CHECK | Convert to and from `boolean` in the data layer (D1 returns numbers). |
 | `JSONB` | `TEXT` + `CHECK (json_valid(...))` | `JSON.stringify` on write, `JSON.parse` on read. |
@@ -87,7 +87,7 @@ The seed creates one account, **Demo Business**, with four users: `owner@`, `adm
 | `increment_automation_execution_count`, `increment_flow_execution_count`, `record_webhook_failure` | single UPDATE statements | 3–6 |
 | `filter_contacts_by_tags`, `get_flow_node_leads`, `get_broadcast_button_analytics` | SQL in the data layer (`LIKE` instead of `ILIKE`; SQLite `LIKE` is case-insensitive for ASCII only) | 3 |
 | `match_ai_knowledge_fts`, `match_ai_knowledge_semantic` | FTS5 query above + Vectorize query | 3 |
-| `merge_duplicate_contacts`, `merge_duplicate_conversations` | not needed: the unique indexes already prevent duplicates. Rerun as a TS script only if imported data violates them. | 7 |
+| `merge_duplicate_contacts`, `merge_duplicate_conversations` | not needed: the unique indexes already prevent duplicates. | n/a |
 | `touch_presence` + `member_presence` table | Durable Object storage | 5 |
 | `_bcast_bump`, `_bcast_cols_for_status`, `recompute_broadcast_counts` | counter triggers + repair SQL above | done |
 | Realtime publication, storage buckets/policies | Durable Object / R2 | 5–6 |
@@ -109,10 +109,6 @@ Each index costs extra rows written on D1, so these were dropped because another
 - `message_templates` uniqueness is per **user** (`user_id, name, language`), not per account.
 - `messages.message_id` (wamid) is unique per conversation only.
 
-## Data import notes (phase 7)
+## Backups
 
-- Convert `timestamptz` values to `toISOString()` format; booleans to 0/1; `deals.value` to cents; arrays and jsonb to JSON text; `phone_normalized` copied as-is.
-- `auth.users` maps to `users` (`id`, `email`, `raw_user_meta_data.full_name` → `name`, `email_confirmed_at IS NOT NULL` → `email_verified`). bcrypt hashes go to Better Auth's credential accounts (phase 2).
-- Skip `member_presence`, `ai_knowledge_chunks.fts` and `embedding`. Re-embed chunks into Vectorize after import.
-- Insert parents before children (table order in the baseline file) or use `PRAGMA defer_foreign_keys = ON` inside the import batch.
 - VERIFY: `wrangler d1 export` has historically not supported databases with virtual tables (the FTS5 table). Back up with Time Travel, or drop and recreate the FTS table around exports.

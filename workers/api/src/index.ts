@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { setWorkerEnv } from '@/lib/cf-env'
+import { runScheduledJobs } from '@/lib/cron/jobs'
 import { consumeBroadcast, consumeInbound, type InboundEnvelope } from './queues'
+import { verifyTicket } from '@/lib/realtime-ticket'
 import { handleInbound, handleVerify } from './webhook'
 
 export { RealtimeHub } from './realtime-hub'
@@ -10,8 +12,9 @@ export { RealtimeHub } from './realtime-hub'
  *
  *   phase 4 (this): Meta webhook ingress → wacrm-inbound queue → processWebhook;
  *                   broadcast passes on wacrm-broadcast (replaces QStash)
- *   phase 5: authenticated realtime WebSocket
- *   phase 6: cron jobs (automation waits, flow timeout sweep)
+ *   phase 5 (this): authenticated realtime WebSocket → RealtimeHub Durable Object
+ *   phase 6: cron jobs (src/lib/cron/jobs.ts): automation waits, flow
+ *            timeout sweep, stalled-broadcast watchdog, auth cleanup
  *
  * Shared app code (src/lib) reads bindings through getEnv(); setWorkerEnv()
  * makes this worker's env available to it.
@@ -55,6 +58,21 @@ app.post('/api/whatsapp/webhook', handleInbound)
 app.get('/webhook/whatsapp', handleVerify)
 app.post('/webhook/whatsapp', handleInbound)
 
+// ── Realtime WebSocket ────────────────────────────────────────────────
+// Reached through the web worker's entry (workers/web/entry.ts), which
+// forwards upgrade requests here. The ticket comes from /api/realtime/ticket.
+app.get('/api/realtime/socket', async (c) => {
+  if (c.req.header('Upgrade') !== 'websocket') return c.text('Expected WebSocket upgrade', 426)
+  const secret = (c.env as unknown as { BETTER_AUTH_SECRET?: string }).BETTER_AUTH_SECRET
+  const ticket = c.req.query('ticket')
+  const claims = secret && ticket ? await verifyTicket(secret, ticket) : null
+  if (!claims) return c.text('Unauthorized', 401)
+  const stub = c.env.REALTIME.get(c.env.REALTIME.idFromName(claims.accountId))
+  const headers = new Headers(c.req.raw.headers)
+  headers.set('x-user-id', claims.userId)
+  return stub.fetch(new Request(c.req.url, { headers }))
+})
+
 // ── Dev-only helpers (404 outside ENVIRONMENT=development) ──────────
 app.use('/dev/*', async (c, next) => {
   if (!isDev(c.env)) return c.notFound()
@@ -68,11 +86,6 @@ app.post('/dev/publish/:accountId', async (c) => {
   return c.json({ reached })
 })
 
-/** Realtime WebSocket, dev-only and UNAUTHENTICATED until phase 5. */
-app.get('/dev/realtime/:accountId', async (c) => {
-  const stub = c.env.REALTIME.get(c.env.REALTIME.idFromName(c.req.param('accountId')))
-  return stub.fetch(c.req.raw)
-})
 
 export default {
   fetch: app.fetch,
@@ -87,7 +100,8 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     setWorkerEnv(env)
-    // Phase 6: automation waits + flow timeout sweep.
-    console.log(`[cron] ${controller.cron} at ${new Date(controller.scheduledTime).toISOString()}`)
+    // Awaited (not waitUntil) so a failure shows on the invocation.
+    const results = await runScheduledJobs(controller.scheduledTime)
+    console.log(`[cron] ${new Date(controller.scheduledTime).toISOString()} ${JSON.stringify(results)}`)
   },
 } satisfies ExportedHandler<Env>

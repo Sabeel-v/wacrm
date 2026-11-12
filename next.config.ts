@@ -45,17 +45,18 @@ const SECURITY_HEADERS = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       // Tailwind + inline style attributes on lots of components.
       "style-src 'self' 'unsafe-inline'",
-      // Supabase public-bucket avatars, contact avatars (arbitrary
+      // Avatars from R2 (same origin), contact avatars (arbitrary
       // https URLs paste-able from the UI), OG images, data URLs for
       // tiny inline assets.
       "img-src 'self' data: blob: https:",
       // Outbound media previews (blob: from MediaRecorder + file picker)
-      // and Supabase public-bucket audio/video the inbox renders.
-      "media-src 'self' blob: https://*.supabase.co",
+      // and R2 audio/video served from /api/storage (same origin).
+      "media-src 'self' blob:",
       "font-src 'self' data:",
-      // Supabase REST + realtime (WSS). All Meta API calls happen
+      // /api/db, /api/auth and the realtime WebSocket are same-origin
+      // ('self' covers ws/wss to the same host). All Meta API calls happen
       // server-side, so graph.facebook.com does not belong here.
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      "connect-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

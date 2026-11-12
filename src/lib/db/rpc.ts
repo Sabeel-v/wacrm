@@ -9,6 +9,8 @@
  * Postgres error codes raised by the originals are preserved.
  */
 import { SCHEMA } from './schema.generated'
+import { executeQuery } from './engine'
+import type { RealtimeSink } from './realtime'
 import { DbQueryError, type Row, type SqlRunner } from './types'
 import type { AccountRole, PolicyContext } from './policy'
 import { hasMinRole } from './policy'
@@ -23,6 +25,8 @@ export interface RpcContext {
   caller: 'service' | 'user' | 'anon'
   /** Set when caller = 'user'. */
   ctx: PolicyContext | null
+  /** Realtime hub sink (optional). */
+  realtime?: RealtimeSink
 }
 
 type Access = 'anon' | 'user' | 'service'
@@ -204,7 +208,10 @@ export const RPCS: Record<string, RpcDef> = {
   // ── 024: presence (moves to the Durable Object in phase 5) ──────────
   touch_presence: {
     access: 'user',
-    async run() {
+    async run({ p_status }, rc) {
+      if (rc.ctx && rc.realtime) {
+        await rc.realtime.touch(rc.ctx.accountId, rc.ctx.userId, p_status === 'away' ? 'away' : 'online')
+      }
       return null
     },
   },
@@ -323,6 +330,19 @@ export const RPCS: Record<string, RpcDef> = {
            last_message_text = ?, last_message_at = ?, updated_at = ? WHERE id = ?`,
         [p_last_message_text, now, now, p_conversation_id],
       )
+      if (rc.realtime) {
+        const res = await executeQuery(
+          {
+            table: 'conversations',
+            action: 'select',
+            select: [{ type: 'star' }],
+            filters: [{ type: 'cond', column: 'id', op: 'eq', value: p_conversation_id }],
+            order: [],
+          },
+          { runner: rc.runner, policy: null },
+        )
+        if (Array.isArray(res.data)) await rc.realtime.change('conversations', 'UPDATE', res.data)
+      }
       return null
     },
   },

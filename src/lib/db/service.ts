@@ -9,6 +9,7 @@
 import { getEnv } from '@/lib/cf-env'
 import { createDbClient, type AuthApi, type DbClient } from './client-core'
 import { errorResult, executeQuery } from './engine'
+import { createRealtimeSink } from './realtime'
 import { executeRpc } from './rpc'
 import { d1Runner, type D1Like } from './runners'
 import { serverStorage } from './storage-server'
@@ -16,6 +17,11 @@ import { serverStorage } from './storage-server'
 async function runner() {
   const env = await getEnv()
   return d1Runner(env.DB as unknown as D1Like)
+}
+
+async function engineParts() {
+  const r = await runner()
+  return { runner: r, realtime: createRealtimeSink(r) }
 }
 
 const noSession: AuthApi = {
@@ -31,10 +37,10 @@ const noSession: AuthApi = {
 
 export function serviceDb(): DbClient {
   return createDbClient({
-    query: async (ast) => executeQuery(ast, { runner: await runner(), policy: null }),
+    query: async (ast) => executeQuery(ast, { ...(await engineParts()), policy: null }),
     rpc: async ({ fn, args }) => {
       try {
-        const data = await executeRpc(fn, args, { runner: await runner(), caller: 'service', ctx: null })
+        const data = await executeRpc(fn, args, { ...(await engineParts()), caller: 'service', ctx: null })
         return { data, error: null, count: null, status: 200, statusText: 'OK' }
       } catch (e) {
         return errorResult(e)

@@ -4,7 +4,6 @@
 node_modules
 docs
 mcp-server
-supabase
 *.md
 !README.md
 .env*

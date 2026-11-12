@@ -2,12 +2,8 @@
 // POST /api/whatsapp/broadcast/[id]/queue
 //
 // Hands a freshly planned broadcast (recipient rows inserted, status
-// 'sending') to the QStash worker, so delivery no longer depends on
-// the wizard's browser tab staying open.
-//
-// 501 { code: 'queue_disabled' } when QSTASH_TOKEN isn't set — the
-// wizard treats that as "drive the send loop from the browser", which
-// is the behaviour without QStash.
+// 'sending') to the wacrm-broadcast Cloudflare Queue, so delivery does
+// not depend on the wizard's browser tab staying open.
 // ============================================================
 
 import { NextResponse } from 'next/server';

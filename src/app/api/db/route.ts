@@ -11,6 +11,7 @@ import { getEnv } from '@/lib/cf-env'
 import { getSessionContext } from '@/lib/auth/session'
 import { errorResult, executeQuery } from '@/lib/db/engine'
 import { anonymousPolicy, createPolicy } from '@/lib/db/policy'
+import { createRealtimeSink } from '@/lib/db/realtime'
 import { executeRpc } from '@/lib/db/rpc'
 import { d1Runner, type D1Like } from '@/lib/db/runners'
 import { DbQueryError, type DbResult } from '@/lib/db/types'
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     if (body.type === 'query') {
       const ast = validateAst(body.ast)
       const policy = ctx ? createPolicy(ctx) : anonymousPolicy
-      return respond(await executeQuery(ast, { runner, policy }))
+      return respond(await executeQuery(ast, { runner, realtime: createRealtimeSink(runner), policy }))
     }
 
     if (body.type === 'rpc') {
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
         throw new DbQueryError('Invalid function name', 'PGRST100', 400)
       }
       const args = body.args && typeof body.args === 'object' ? (body.args as Record<string, unknown>) : {}
-      const data = await executeRpc(body.fn, args, { runner, caller: ctx ? 'user' : 'anon', ctx })
+      const data = await executeRpc(body.fn, args, { runner, realtime: createRealtimeSink(runner), caller: ctx ? 'user' : 'anon', ctx })
       return respond({ data, error: null, count: null, status: 200, statusText: 'OK' })
     }
 

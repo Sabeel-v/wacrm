@@ -9,7 +9,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "wacrm-web",
-  "main": ".open-next/worker.js",
+  "main": "workers/web/entry.ts",
   "compatibility_date": "2026-11-10",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {

@@ -29,14 +29,12 @@ INSERT INTO profiles (id, user_id, account_id, account_role, full_name, email) V
 -- LOCAL TEST CREDENTIALS ONLY. Every seed user signs in with:
 --   email:    owner@wacrm.test | admin@wacrm.test | agent@wacrm.test | viewer@wacrm.test
 --   password: WacrmDev!2026
--- owner/admin/agent use Better Auth's scrypt hash. viewer uses a bcrypt hash
--- in Supabase's format ($2a$10$…), the shape imported from auth.users, so
--- signing in as viewer exercises the verify-then-upgrade path.
+-- All four use Better Auth's scrypt hash format.
 INSERT INTO auth_accounts (id, user_id, provider_account_id, provider_id, password) VALUES
   ('a5000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'credential', '324ffce750cf437b52bbbcdce8723a40:6bec43591a735969c5cdaba023ecb1ce302d7a9355d13bbe863eb6b78d3aa638b1da26ee88466275a4dbca8bd8cfe2600a7c65ddd931b185c615dd6ddb390f59'),
   ('a5000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000002', 'credential', '1effdb7092aefd9f26db33bc1e77f1b1:22da97d490170f3a26b64b4f4387b341ec49ee747dd794d3d4d4ea05a98ce0cb547081509855e785e44f256060d4c7833ce2d84b6bf1b5ec89b068765071d39f'),
   ('a5000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000003', 'credential', 'c2b97d863b3f74283f28b35ea9862186:fa3e70f01bba5fe39504b00ffc197a7d52bd7c5a3276eccb285a15030ba42939ee49a678de3a9d92d918eefa64a0f1b6573410055af89013e95129479c93d708'),
-  ('a5000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000004', 'credential', '$2a$10$bkxwo6nYkNsXC5AWmgSvV.3mqTJ3Rh/4Axdk3k76RilLSvvYYmOHK');
+  ('a5000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000004', '00000000-0000-4000-8000-000000000004', 'credential', 'c2b97d863b3f74283f28b35ea9862186:fa3e70f01bba5fe39504b00ffc197a7d52bd7c5a3276eccb285a15030ba42939ee49a678de3a9d92d918eefa64a0f1b6573410055af89013e95129479c93d708');
 
 -- Tags and custom fields -------------------------------------------------------
 INSERT INTO tags (id, account_id, user_id, name, color) VALUES

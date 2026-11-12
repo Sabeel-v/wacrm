@@ -8,9 +8,11 @@ Everything here runs on your machine. No Cloudflare account or paid plan is need
 | Path | What |
 |---|---|
 | `wrangler.jsonc` | **wacrm-web**: the Next.js app, built by OpenNext into `.open-next/` |
+| `workers/web/entry.ts` | Web worker entry: OpenNext plus the realtime WebSocket forward |
 | `open-next.config.ts` | OpenNext adapter config (no ISR cache needed) |
 | `workers/api/` | **wacrm-api**: Hono worker for the webhook, queue consumers, cron and the realtime Durable Object. See [webhook-queues.md](webhook-queues.md) |
-| `workers/api/src/realtime-hub.ts` | `RealtimeHub` Durable Object (WebSocket hibernation) |
+| `workers/api/src/realtime-hub.ts` | `RealtimeHub` Durable Object (WebSocket hibernation). See [realtime.md](realtime.md) |
+| `src/lib/cron/jobs.ts` | Cron jobs run by the API worker. See [cron-storage.md](cron-storage.md) |
 | `d1/migrations/` | D1 schema migrations. Schema details and the Postgres mapping are in [d1-schema.md](d1-schema.md) |
 | `d1/seed/dev.sql` | Local seed data (`npm run db:reset:local`) |
 | `cloudflare-env.d.ts`, `workers/api/worker-configuration.d.ts` | generated binding types (`npm run cf-typegen`) |
@@ -73,7 +75,7 @@ Expect `"ok":true` with d1, r2, queue, durableObject and apiWorker all `true`.
 ```bash
 curl -X POST "http://127.0.0.1:8787/cdn-cgi/local/explorer/api/local/scheduled?worker=wacrm-api" -H "Content-Type: application/json" -d "{\"cron\":\"* * * * *\"}"
 ```
-Fires the API worker's cron handler; the terminal logs `[wacrm-api] [cron] ...`.
+Fires the API worker's cron handler; the terminal logs `[wacrm-api] [cron] <time> {"automations":{"processed":0}}`.
 
 Ignore the `curl ".../cdn-cgi/local/scheduled"` hint Wrangler prints at startup. With two workers it targets the first one (the Next.js app), which has no cron handler, so it returns 500. Use the explorer command above.
 
@@ -81,11 +83,11 @@ Ignore the `curl ".../cdn-cgi/local/scheduled"` hint Wrangler prints at startup.
 
 If the preview starts on 8788/8789 instead of 8787, another `wrangler dev` is still running. Stop it, or use the port shown in `Ready on ...`.
 
-The API worker's `/dev/*` routes (`POST /dev/enqueue`, `POST /dev/publish/:accountId`, `GET /dev/realtime/:accountId` WebSocket) are reachable when it runs alone via `npm run dev:api`. They return 404 unless `ENVIRONMENT=development`. The realtime route is **unauthenticated** until phase 5.
+The API worker's `/dev/publish/:accountId` route is reachable when it runs alone via `npm run dev:api`. It returns 404 unless `ENVIRONMENT=development`.
 
 ## Environment and secrets
 
-- Wrangler loads `.env.local` automatically in local dev (values show as `(hidden)` at startup). The app still talks to Supabase until the data layer moves to D1.
+- Wrangler loads `.env.local` automatically in local dev (values show as `(hidden)` at startup).
 - `NEXT_PUBLIC_*` values are inlined at build time.
 - **Before deploying:** OpenNext also compiles `.env*` files into the worker bundle. For production, use `wrangler secret put` instead and make sure no secret-bearing `.env` file is present at build time (phase 8).
 

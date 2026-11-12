@@ -7,6 +7,7 @@
  * a bound parameter.
  */
 import { errorResult, toDbError } from './engine-errors'
+import { REALTIME_TABLES, type RealtimeSink } from './realtime'
 import { SCHEMA, type ColumnKind, type ForeignKey } from './schema.generated'
 import {
   DbQueryError,
@@ -48,6 +49,8 @@ export type ScopeMode = 'read' | 'write'
 
 export interface EngineOptions {
   runner: SqlRunner
+  /** Pushes changes to browsers (Durable Object hub). Optional; best-effort. */
+  realtime?: RealtimeSink
   /** null = service role (bypasses policies, like the Supabase service key). */
   policy: Policy | null
 }
@@ -692,6 +695,19 @@ async function runDelete(ast: QueryAst, engine: EngineOptions): Promise<Row[]> {
   return runner.all(`DELETE FROM ${q(table)} AS "t0"${where.sql} RETURNING ${returningList(table)}`, where.params)
 }
 
+/** Publish a write to the realtime hub (full API-shaped rows, like postgres_changes). */
+async function emitChange(ast: QueryAst, returned: Row[], engine: EngineOptions): Promise<void> {
+  if (!engine.realtime || !REALTIME_TABLES.has(ast.table) || !returned.length) return
+  const rows = await projectReturned(
+    ast.table,
+    { ...ast, select: [{ type: 'star' }] },
+    returned,
+    { ...engine, policy: null },
+  )
+  const eventType = ast.action === 'delete' ? 'DELETE' : ast.action === 'update' ? 'UPDATE' : 'INSERT'
+  await engine.realtime.change(ast.table, eventType, rows)
+}
+
 // ── Entry point ────────────────────────────────────────────────────────
 function ok<T>(data: T, count: number | null, status = 200): DbResult<T> {
   return { data, error: null, count, status, statusText: status === 201 ? 'Created' : 'OK' }
@@ -731,6 +747,7 @@ export async function executeQuery(ast: QueryAst, engine: EngineOptions): Promis
     else if (ast.action === 'update') returned = await runUpdate(ast, engine)
     else returned = await runDelete(ast, engine)
 
+    await emitChange(ast, returned, engine)
     const data = await projectReturned(ast.table, ast, returned, engine)
     const status = ast.action === 'insert' || ast.action === 'upsert' ? 201 : 200
     if (!ast.select) return { ...ok(null, null, status) }

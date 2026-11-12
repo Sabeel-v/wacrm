@@ -30,8 +30,7 @@ CREATE TABLE auth_accounts (
   -- Provider's id for this login. For email/password ("credential") it is the user id.
   provider_account_id       TEXT NOT NULL,
   provider_id               TEXT NOT NULL,
-  -- scrypt hash from Better Auth, or a bcrypt hash ($2a$/$2b$) imported from
-  -- Supabase auth.users (verified with bcryptjs, then re-hashed on login).
+  -- scrypt hash from Better Auth.
   password                  TEXT,
   access_token              TEXT,
   refresh_token             TEXT,

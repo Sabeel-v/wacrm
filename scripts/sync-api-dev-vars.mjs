@@ -7,7 +7,7 @@
 // are Worker secrets: `npx wrangler secret put NAME -c workers/api/wrangler.jsonc`.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
-const KEYS = ['ENCRYPTION_KEY', 'META_APP_SECRET', 'META_APP_ID']
+const KEYS = ['ENCRYPTION_KEY', 'META_APP_SECRET', 'META_APP_ID', 'BETTER_AUTH_SECRET']
 const SOURCE = '.env.local'
 const TARGET = 'workers/api/.dev.vars'
 

@@ -11,15 +11,10 @@
  *                                 provider before production, see docs/auth.md)
  */
 import { betterAuth } from 'better-auth'
-import { createAuthMiddleware } from 'better-auth/api'
-import { hashPassword, verifyPassword } from 'better-auth/crypto'
 import { nextCookies } from 'better-auth/next-js'
-import bcrypt from 'bcryptjs'
 import { getEnv } from '@/lib/cf-env'
 import { d1Runner, type D1Like } from '@/lib/db/runners'
 import { bootstrapAccount } from './bootstrap'
-
-const isBcrypt = (hash: string) => /^\$2[aby]\$/.test(hash)
 
 function trustedOrigins(env: CloudflareEnv): string[] {
   const origins = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8787', 'http://127.0.0.1:8787']
@@ -90,12 +85,6 @@ function createAuth(env: CloudflareEnv) {
       enabled: true,
       minPasswordLength: 6, // Supabase default
       autoSignIn: true,
-      password: {
-        hash: (password) => hashPassword(password),
-        // Accept bcrypt hashes imported from Supabase auth.users as well as Better Auth's scrypt.
-        verify: async ({ hash, password }) =>
-          isBcrypt(hash) ? bcrypt.compare(password, hash) : verifyPassword({ hash, password }),
-      },
       sendResetPassword: async ({ user, url }) => {
         // TODO(phase 8): send via an email provider. Locally the link is printed.
         console.log(`\n[auth] Password reset link for ${user.email}:\n  ${url}\n`)
@@ -110,27 +99,6 @@ function createAuth(env: CloudflareEnv) {
           },
         },
       },
-    },
-    hooks: {
-      after: createAuthMiddleware(async (ctx) => {
-        // Upgrade imported Supabase bcrypt hashes to scrypt after a successful login.
-        if (ctx.path !== '/sign-in/email') return
-        const session = ctx.context.newSession
-        const password = (ctx.body as { password?: unknown } | undefined)?.password
-        if (!session || typeof password !== 'string') return
-        const rows = await runner.all(
-          `SELECT id, password FROM auth_accounts WHERE user_id = ? AND provider_id = 'credential'`,
-          [session.user.id],
-        )
-        const current = rows[0]?.password
-        if (typeof current === 'string' && isBcrypt(current)) {
-          await runner.all(`UPDATE auth_accounts SET password = ?, updated_at = ? WHERE id = ?`, [
-            await hashPassword(password),
-            new Date().toISOString(),
-            rows[0].id,
-          ])
-        }
-      }),
     },
     plugins: [nextCookies()],
   })

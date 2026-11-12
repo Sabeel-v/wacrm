@@ -85,12 +85,12 @@ export interface DbClientParts {
   channel?: (name: string) => RealtimeChannel
 }
 
-/** Realtime stub until the Durable Object hub is wired (phase 5). */
+/** Inert channel for server-side clients (realtime is browser-only; see realtime-client.ts). */
 export function inertChannel(name: string): RealtimeChannel {
   const ch: RealtimeChannel = {
     on: () => ch,
     subscribe: (cb) => {
-      // Report SUBSCRIBED so UIs don't show a connection error; no events arrive yet.
+      // Report SUBSCRIBED so UIs don't show a connection error; no events arrive.
       queueMicrotask(() => cb?.('SUBSCRIBED'))
       return ch
     },
